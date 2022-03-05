@@ -27,8 +27,16 @@ dependencies:
 - tasty
 - tasty-hunit
 
+ghc-options:
+  - -Wall
+  - -fwarn-tabs
+  - -fwarn-incomplete-uni-patterns
+  - -fwarn-incomplete-record-updates
+
 library:
   source-dirs: src
+  ghc-options:
+    - -fwarn-identities
 
 executables:
   MiniK-exe:
@@ -55,3 +63,7 @@ tests:
 default-extensions:
   - NamedFieldPuns
   - DerivingStrategies
+  - LambdaCase
+  - ExplicitNamespaces
+  - PatternSynonyms
+  - BlockArguments

@@ -15,6 +15,9 @@ module MiniK
     , retractConcreteMap
     , extractConcreteId
     , canBeRewritten
+    , normalizeK
+    , deNormalizeK
+    , reNormalizeK
     ) where
 
 type Name = String
@@ -36,6 +39,24 @@ data MiniK
     | KSymbol Name [MiniK]
     | KSeq MiniK MiniK
     deriving stock (Show, Eq, Ord)
+
+normalizeK :: MiniK -> [MiniK]
+normalizeK term = normalizeK' term []
+  where
+  normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
+      $ normalizeK' term2 normalized
+  normalizeK' KEmpty normalized = normalized
+  normalizeK' term1 normalized = term1:normalized
+
+deNormalizeK :: [MiniK] -> MiniK
+deNormalizeK [] = KEmpty
+deNormalizeK [term, term2] = KSeq term term2
+deNormalizeK (term:terms) = KSeq term $ deNormalizeK terms
+
+reNormalizeK :: MiniK -> MiniK
+reNormalizeK = deNormalizeK . normalizeK
+
+--
 
 retractIntTerm :: MiniK -> IntType
 retractIntTerm (KInt intTerm) = intTerm

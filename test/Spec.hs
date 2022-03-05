@@ -19,7 +19,7 @@ impTests =
 assignTests :: TestTree
 assignTests =
     testGroup
-        "Assign tests" 
+        "Assign tests"
         [ singleAssign
         , multipleAssign
         ]
@@ -53,7 +53,7 @@ singleAssign =
                     , kState = MapEmpty
                     }
             expectedResult =
-                Konfiguration 
+                Konfiguration
                     { k = KEmpty
                     , kState =
                         MapCons (Id "a") (I 1) MapEmpty
@@ -104,9 +104,9 @@ ifTrueTest :: TestTree
 ifTrueTest =
     testCase "Simple if true" $ do
         let trueBranch = assignA1
-            falseBranch = assignB2 
+            falseBranch = assignB2
             konfig =
-                Konfiguration 
+                Konfiguration
                     { k =
                         KSeq
                             (KSymbol
@@ -120,7 +120,7 @@ ifTrueTest =
                     , kState = MapEmpty
                     }
             expectedResult =
-                Konfiguration 
+                Konfiguration
                     { k = KEmpty
                     , kState =
                         MapCons (Id "a") (I 1) MapEmpty
@@ -139,7 +139,7 @@ ifFalseTest =
         let trueBranch = assignA1
             falseBranch = assignB2
             konfig =
-                Konfiguration 
+                Konfiguration
                     { k =
                         KSeq
                             (KSymbol
@@ -153,7 +153,7 @@ ifFalseTest =
                     , kState = MapEmpty
                     }
             expectedResult =
-                Konfiguration 
+                Konfiguration
                     { k = KEmpty
                     , kState =
                         MapCons (Id "b") (I 2) MapEmpty
@@ -172,7 +172,7 @@ ifLookupTest =
         let trueBranch = assignA1
             falseBranch = assignB2
             konfig =
-                Konfiguration 
+                Konfiguration
                     { k =
                         KSeq
                             (KSymbol
@@ -187,7 +187,7 @@ ifLookupTest =
                         MapCons (Id "a") (I 0) MapEmpty
                     }
             expectedResult =
-                Konfiguration 
+                Konfiguration
                     { k = KEmpty
                     , kState =
                         MapCons (Id "a") (I 1) MapEmpty
@@ -204,14 +204,14 @@ incrementTo10 :: TestTree
 incrementTo10 =
     testCase "Program which increments a counter to 10" $ do
         let konfig =
-                Konfiguration 
+                Konfiguration
                     { k =
                         KSeq
                             assignA1
                             ( KSeq
                                 (KSymbol
                                     "while"
-                                    [ aLessThan11
+                                    [ aLessThan 10
                                     , incrementA
                                     ]
                                 )
@@ -243,7 +243,7 @@ checkIsPrime =
     testCase "Program which checks if a number is prime" $ do
         let actualResult1 = rewrite (program 7) Imp.rewriteRules
             actualResult2 = rewrite (program 10) Imp.rewriteRules
-            
+
         assertBool "Program is not stuck" (not (canBeRewritten actualResult1))
         assertBool "Program is not stuck" (not (canBeRewritten actualResult2))
         assertBool "Correct value of isPrime" (not (flagIndicatesIsPrime actualResult1))
@@ -265,6 +265,7 @@ checkIsPrime =
                                         "if"
                                         [ ifCondition inputNumber
                                         , assignIsPrimeTrue
+                                        , KEmpty
                                         ]
                                     )
                                     (KSeq
@@ -272,7 +273,7 @@ checkIsPrime =
                                         KEmpty
                                     )
                                 ]
-                            ) 
+                            )
                             KEmpty
                         )
                     )
@@ -336,9 +337,9 @@ withLookupIfCondition =
             (LT' (Mod (I 6) (I 2)) (I 1))
         )
 
-aLessThan11 :: MiniK
-aLessThan11 =
-    KBool (LT' (IntId (Id "a")) (I 11))
+aLessThan :: Int -> MiniK
+aLessThan n =
+    KBool (LT' (IntId (Id "a")) (I n))
 
 incrementA :: MiniK
 incrementA =
@@ -369,7 +370,7 @@ whileCondition inputNumber =
     KBool (And counterLessThanN isPrimeLessThan1)
   where
     counterLessThanN =
-        LT' (IntId (Id "counter")) (I inputNumber) 
+        LT' (IntId (Id "counter")) (I inputNumber)
     isPrimeLessThan1 =
         LT' (IntId (Id "isPrime")) (I 1)
 

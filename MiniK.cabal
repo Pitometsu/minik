@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.34.6.
 --
 -- see: https://github.com/sol/hpack
 
@@ -40,6 +40,11 @@ library
   default-extensions:
       NamedFieldPuns
       DerivingStrategies
+      LambdaCase
+      ExplicitNamespaces
+      PatternSynonyms
+      BlockArguments
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
   build-depends:
       base >=4.7 && <5
     , containers
@@ -58,7 +63,11 @@ executable MiniK-exe
   default-extensions:
       NamedFieldPuns
       DerivingStrategies
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+      LambdaCase
+      ExplicitNamespaces
+      PatternSynonyms
+      BlockArguments
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       MiniK
     , base >=4.7 && <5
@@ -79,7 +88,11 @@ test-suite MiniK-test
   default-extensions:
       NamedFieldPuns
       DerivingStrategies
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+      LambdaCase
+      ExplicitNamespaces
+      PatternSynonyms
+      BlockArguments
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       MiniK
     , base >=4.7 && <5

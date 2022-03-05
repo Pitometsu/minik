@@ -18,7 +18,7 @@ import qualified Data.Map.Lazy as Map
 
 -- A substitution is an association between variables and
 -- MiniK terms.
-newtype Substitution = Substitution (Map Name MiniK)
+newtype Substitution = Substitution (Map Name MiniK) deriving stock Show
 
 empty :: Substitution
 empty = Substitution Map.empty

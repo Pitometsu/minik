@@ -5,8 +5,10 @@ module NormalizedMap
     , renormalize
     , fromConcrete
     , lookupConcreteId
+    , map
     ) where
 
+import Prelude hiding (map)
 import MiniK
 import Data.Map.Lazy (Map)
 import Data.Function ((&))
@@ -26,6 +28,20 @@ data NormalizedMap =
         { opaque :: Maybe Name
         , symbolic :: Map Name IntType
         , concrete :: Map Name IntType
+        }
+
+map :: (IntType -> IntType) -> NormalizedMap -> NormalizedMap
+map f
+    NormalizedMap
+        { opaque
+        , symbolic
+        , concrete
+        }
+  =
+    NormalizedMap
+        { opaque
+        , symbolic = f <$> symbolic
+        , concrete = f <$> concrete
         }
 
 empty :: NormalizedMap

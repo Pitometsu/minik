@@ -112,7 +112,7 @@ instance SubstituteVariable Konfiguration where
         Konfiguration { k, kState }
         subst
       =
-        Konfiguration 
+        Konfiguration
             { k = substituteVariable k subst
             , kState = substituteVariable kState subst
             }
@@ -140,7 +140,7 @@ instance SubstituteVariable MiniK where
 instance SubstituteVariable IntType where
     substituteVariable (I val) _ = I val
     substituteVariable (IntVar name) (varName, kTerm)
-        | name == varName = 
+        | name == varName =
             retractIntTerm kTerm
         | otherwise = IntVar name
     substituteVariable (IntId idTerm) subst =
@@ -157,14 +157,14 @@ instance SubstituteVariable IntType where
 instance SubstituteVariable IdType where
     substituteVariable (Id name) _ = Id name
     substituteVariable (IdVar name) (varName, kTerm)
-        | name == varName = 
+        | name == varName =
             retractIdTerm kTerm
         | otherwise = IdVar name
 
 instance SubstituteVariable BoolType where
     substituteVariable (B val) _ = B val
     substituteVariable (BoolVar name) (varName, kTerm)
-        | name == varName = 
+        | name == varName =
             retractBoolTerm kTerm
         | otherwise = BoolVar name
     substituteVariable (Not boolTerm) subst =

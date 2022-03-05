@@ -14,6 +14,7 @@ import qualified Data.Map.Lazy as Map
 import Data.Map.Lazy (Map)
 import Data.Function ((&))
 import NormalizedMap (NormalizedMap (..))
+import Debug.Trace
 
 -- Matching is the heart of the rewrite engine.
 --
@@ -28,8 +29,8 @@ import NormalizedMap (NormalizedMap (..))
 -- map case, where we need to account for map associativity and commutativity.
 match :: Konfiguration -> Konfiguration -> Maybe Substitution
 match
-    Konfiguration { k = kKonfig, kState = kStateKonfig } 
-    Konfiguration { k = kRule, kState = kStateRule } 
+    Konfiguration { k = kKonfig, kState = kStateKonfig }
+    Konfiguration { k = kRule, kState = kStateRule }
   =
     matchWithSubstitution kKonfig kRule Substitution.empty
     >>= matchWithSubstitution kStateKonfig kStateRule
@@ -39,22 +40,28 @@ class Match term where
 
 instance Match MiniK where
     matchWithSubstitution kTerm (KVar name) subst =
+        traceEvent "Match \"KVar\"" $
         Just (Substitution.insert name kTerm subst)
-    matchWithSubstitution KEmpty KEmpty subst = Just subst
+    matchWithSubstitution KEmpty KEmpty subst =
+        traceEvent "Match \"KEmpty\"" $
+        Just subst
     matchWithSubstitution (KInt intTermKonfig) (KInt intTermRule) subst =
+        traceEvent "Match \"KInt\"" $
         matchWithSubstitution intTermKonfig intTermRule subst
     matchWithSubstitution (KBool boolTermKonfig) (KBool boolTermRule) subst =
+        traceEvent "Match \"KBool\"" $
         matchWithSubstitution boolTermKonfig boolTermRule subst
     matchWithSubstitution (KMap mapTermKonfig) (KMap mapTermRule) subst =
+        traceEvent "Match \"KMap\"" $
         matchWithSubstitution mapTermKonfig mapTermRule subst
 
     matchWithSubstitution
         (KSymbol konfigSymbolName konfigArgs)
         (KSymbol ruleSymbolName ruleArgs)
         subst
-        | konfigSymbolName == ruleSymbolName 
+        | konfigSymbolName == ruleSymbolName
         , length konfigArgs == length ruleArgs
-      = 
+      =
         Substitution.multiUnion
         <$> traverse
             (\(kArg, rArg) -> matchWithSubstitution kArg rArg subst)
@@ -77,14 +84,14 @@ instance Match IntType where
     matchWithSubstitution intTerm (IntVar name) subst =
         Just (Substitution.insert name (KInt intTerm) subst)
     matchWithSubstitution (I val1) (I val2) subst
-        | val1 == val2 = Just subst 
+        | val1 == val2 = Just subst
         | otherwise = Nothing
     matchWithSubstitution (IntId konfigIdTerm) (IntId ruleIdTerm) subst =
         matchWithSubstitution konfigIdTerm ruleIdTerm subst
 
     matchWithSubstitution
-        (Plus konfigIdTerm1 konfigIdTerm2) 
-        (Plus ruleIdTerm1 ruleIdTerm2) 
+        (Plus konfigIdTerm1 konfigIdTerm2)
+        (Plus ruleIdTerm1 ruleIdTerm2)
         subst
       = do
         subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
@@ -92,8 +99,8 @@ instance Match IntType where
         return (Substitution.union subst1 subst2)
 
     matchWithSubstitution
-        (Mod konfigIdTerm1 konfigIdTerm2) 
-        (Mod ruleIdTerm1 ruleIdTerm2) 
+        (Mod konfigIdTerm1 konfigIdTerm2)
+        (Mod ruleIdTerm1 ruleIdTerm2)
         subst
       = do
         subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
@@ -106,16 +113,16 @@ instance Match IdType where
     matchWithSubstitution idTerm (IdVar name) subst =
         Just (Substitution.insert name (KInt (IntId idTerm)) subst)
     matchWithSubstitution (Id name1) (Id name2) subst
-        | name1 == name2 = Just subst 
+        | name1 == name2 = Just subst
         | otherwise = Nothing
     matchWithSubstitution _ _ _ = Nothing
 
 instance Match BoolType where
     matchWithSubstitution boolTerm (BoolVar name) subst =
         Just (Substitution.insert name (KBool boolTerm) subst)
-    
+
     matchWithSubstitution (B val1) (B val2) subst
-        | val1 == val2 = Just subst 
+        | val1 == val2 = Just subst
         | otherwise = Nothing
 
     matchWithSubstitution (Not boolTermKonfig) (Not boolTermRule) subst =
@@ -135,7 +142,7 @@ instance Match BoolType where
         (LT' intTermRule1 intTermRule2)
         subst
       = do
-        subst1 <- matchWithSubstitution intTermKonfig1 intTermRule1 subst 
+        subst1 <- matchWithSubstitution intTermKonfig1 intTermRule1 subst
         subst2 <- matchWithSubstitution intTermKonfig2 intTermRule2 subst
         return (Substitution.union subst1 subst2)
 
@@ -147,8 +154,8 @@ instance Match MapType where
     matchWithSubstitution MapEmpty MapEmpty subst = Just subst
 
     matchWithSubstitution
-        konfigMap@(MapCons konfigIdTerm konfigIntTerm konfigMapTerm)
-        ruleMap@(MapCons ruleIdTerm ruleIntTerm ruleMapTerm)
+        konfigMap@MapCons {}
+        ruleMap@MapCons {}
         subst
       = do
         let normalizedKonfigMap = NormalizedMap.normalize konfigMap
@@ -172,8 +179,11 @@ instance Match NormalizedMap where
         subst
         -- We expect the program configuration to be fully concrete.
         | not (null opaqueKonfig && Map.null symbolicKonfig) =
+            traceEvent "Match \"NormalizedMap\", not concrete"
             Nothing
-        | otherwise = do
+        | otherwise =
+        traceEvent "Match \"NormalizedMap\"" $
+        do
             (leftToMatch1, matchedWithConcrete) <-
                 matchWithConcrete concreteKonfig concreteRule
             (leftToMatch2, matchedWithSymbolic) <-
@@ -191,7 +201,9 @@ instance Match NormalizedMap where
             :: Map Name IntType
             -> Map Name IntType
             -> Maybe (Map Name IntType, Substitution)
-        matchWithConcrete mapKonfig mapRule = do
+        matchWithConcrete mapKonfig mapRule =
+          traceEvent "Match \"NormalizedMap\" with concrete ids" $
+          do
             let intersectionKonfigValues =
                     Map.intersection mapKonfig mapRule
                     & Map.elems
@@ -200,7 +212,7 @@ instance Match NormalizedMap where
                     & Map.elems
                 difference = Map.difference mapKonfig mapRule
             matchedValues <-
-                traverse 
+                traverse
                     (uncurry matchElements)
                     (zip intersectionKonfigValues intersectionRuleValues)
             return (difference, Substitution.multiUnion matchedValues)
@@ -209,7 +221,9 @@ instance Match NormalizedMap where
             :: Map Name IntType
             -> Map Name IntType
             -> Maybe (Map Name IntType, Substitution)
-        matchWithSymbolic mapKonfig mapRule = do
+        matchWithSymbolic mapKonfig mapRule =
+          traceEvent "Match \"NormalizedMap\" with symbolic vars" $
+          do
             matchResult <-
                 generateMatch (Map.toList mapKonfig) (Map.toList mapRule)
                 & Logic.observeT
@@ -221,8 +235,9 @@ instance Match NormalizedMap where
             :: Map Name IntType
             -> Maybe Name
             -> Maybe Substitution
-        matchWithOpaque konfigMap Nothing = Nothing
+        matchWithOpaque _ Nothing = Nothing
         matchWithOpaque konfigMap (Just varName) =
+          traceEvent "Match \"NormalizedMap\" with an opaque map" $
             let unNormalizedMap =
                     KMap
                     . NormalizedMap.unNormalize

@@ -1,5 +1,6 @@
 module CheckCondition
-    ( checkCondition
+    ( evaluate
+    , checkCondition
     ) where
 
 import MiniK
@@ -17,11 +18,14 @@ checkCondition _ (B val) = val
 checkCondition _ (BoolVar _) =
     error "Variable should have been instantiated."
 checkCondition mapTerm (Not boolTerm) =
+    traceEvent "Check condition \"Not\"" $
     not (checkCondition mapTerm boolTerm)
-checkCondition mapTerm (And boolTerm1 boolTerm2) = 
+checkCondition mapTerm (And boolTerm1 boolTerm2) =
+    traceEvent "Check condition \"And\"" $
     checkCondition mapTerm boolTerm1
     && checkCondition mapTerm boolTerm2
 checkCondition mapTerm (LT' intTerm1 intTerm2) =
+    traceEvent "Check condition \"Less than\"" $
     evaluate mapTerm intTerm1
     < evaluate mapTerm intTerm2
 

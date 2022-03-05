@@ -3,10 +3,10 @@ module Rewrite
     , rewriteStep
     ) where
 
-import MiniK (Konfiguration (..), RewriteRule (..))
+import MiniK (Konfiguration (..), RewriteRule (..), pattern I, reNormalizeK)
 import qualified Control.Monad as Monad
 import Data.Maybe (mapMaybe)
-import CheckCondition (checkCondition)
+import CheckCondition (checkCondition, evaluate)
 import Match (match)
 import Substitute (substitute)
 import qualified NormalizedMap
@@ -25,7 +25,7 @@ applyRewriteRule
     -> RewriteRule
     -> Maybe Konfiguration
 applyRewriteRule konfig rule = do
-    matchResult <- match konfig (left rule)
+    matchResult <- match konfig $ left rule
     substitutedRule <- substitute matchResult rule
     let requiredCondition = sideCondition substitutedRule
         state =
@@ -34,11 +34,13 @@ applyRewriteRule konfig rule = do
             . left
             $ substitutedRule
     Monad.guard (checkCondition state requiredCondition)
-    let processedNewKonfig =
-            (right substitutedRule)
-                { kState =
-                    NormalizedMap.renormalize
-                        (kState . right $ substitutedRule)
+    let konfigState = NormalizedMap.normalize $ kState konfig
+        processedNewKonfig =
+            ((\konf -> konf {k = reNormalizeK $ k konf}) $ right substitutedRule)
+                { kState = NormalizedMap.unNormalize
+                      . NormalizedMap.map (I . evaluate konfigState)
+                      . NormalizedMap.normalize
+                      . kState $ right substitutedRule
                 }
     return processedNewKonfig
 
@@ -48,7 +50,14 @@ rewriteStep
     :: Konfiguration
     -> [RewriteRule]
     -> Konfiguration
-rewriteStep konfig rewriteRules =
+rewriteStep konfig = rewriteStep ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
+
+rewriteStep'
+    :: Konfiguration
+    -> [RewriteRule]
+    -> Konfiguration
+rewriteStep' konfig rewriteRules =
+    traceEvent "Rewrite step" $
     let results =
             mapMaybe (applyRewriteRule konfig) rewriteRules
      in
@@ -63,10 +72,11 @@ rewrite
     -> [RewriteRule]
     -> Konfiguration
 rewrite konfig rewriteRules =
-    loop konfig
+    traceEvent "Rewrite" $
+    loop ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
   where
     loop input =
-        let output = rewriteStep input rewriteRules
+        let output = rewriteStep' input rewriteRules
          in
             if input == output
                 then input
