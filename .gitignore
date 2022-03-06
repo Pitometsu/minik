@@ -12,10 +12,10 @@ cabal-dev
 .hsenv
 .cabal-sandbox/
 cabal.sandbox.config
-*.prof
 *.aux
-*.hp
-*.eventlog
+# *.prof
+# *.hp
+# *.eventlog
 .stack-work/
 cabal.project.local
 cabal.project.local~

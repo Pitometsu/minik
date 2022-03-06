@@ -44,6 +44,7 @@ library
       ExplicitNamespaces
       PatternSynonyms
       BlockArguments
+      TypeApplications
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
   build-depends:
       base >=4.7 && <5
@@ -67,7 +68,8 @@ executable MiniK-exe
       ExplicitNamespaces
       PatternSynonyms
       BlockArguments
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -threaded -rtsopts -with-rtsopts=-N
+      TypeApplications
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l"
   build-depends:
       MiniK
     , base >=4.7 && <5
@@ -92,7 +94,8 @@ test-suite MiniK-test
       ExplicitNamespaces
       PatternSynonyms
       BlockArguments
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -threaded -rtsopts -with-rtsopts=-N
+      TypeApplications
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l"
   build-depends:
       MiniK
     , base >=4.7 && <5

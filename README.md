@@ -25,7 +25,7 @@ This assessment is desgined to mimic as much as possible the responsibilities yo
 
 ## TODOs:
 
-Obviously, it would be easier, faster and most effecient -- to refactor the data structures first to encode business logic in elegant way with most suitable type guaranties, which guide appropriate functions refactoring. And do necessary optimizations in bottleneck places after that. But I choose other way: find and make step-by-step least necessary fixes to be able compare performance changes. Which take a lot more time, unfortunatelly, but corresponds to the task requirements.
+Obviously, it would be easier, faster and most effecient -- to refactor the data structures first to encode business logic in elegant way with most suitable type guaranties, which guide appropriate functions refactoring. And do necessary optimizations in bottleneck places after that. But I choose other way: find and make step-by-step least necessary fixes to be able compare performance changes. Which take a lot more time, unfortunatelly, but corresponds to the task requirements. Also, I'll try to avoid make changes in the target language semantic (an Imp), and appropriate matching logic (or make a small necessary step-by-step fixes and performance improvements on demand only).
 
 TODO: evaluate RHS of assign
 TODO: evaluate nested sequences, e.g. by subsequential matching
@@ -73,6 +73,9 @@ FIXME: At matchWithSymbolic wrap Logic.observeT with error handler in case of ze
 FIXME: Add test to match empty map with non-opaque map. Fix if necessary (matchWithOpaque the Nothing case).
 FIXME: Add test that KSeq inside KSymbol inherit substitutions properly. Fix it if necessary (return $ Substitution.multiUnion [subst1, subst2, subst]). The same for Plus, And, LT'
 FIXME: Simplify IdVar pattern matching, avoid nested pattern hardcoding (e.g. by using back-tracking).
+???: Should normalizeK wrap MiniK in KSeq if it not wrapped yet (to be compatibele with current rewrite rules)?
+
+Substitution cache argument of matchWithSubstitution function make sense only for map types (as a state implementation at the moment, MapVar for current Imp only).
 
 
 So, plan is to:
@@ -80,7 +83,7 @@ So, plan is to:
 - [X] Read the codebase
 - [X] Understand the code flow
 - [X] Fix tests
-- [ ] Write more tests
+- [ ] Write more tests (Add TestImp language for that)
 - [ ] Rewrite datatypes as GADT to impove code maintainability
 - [ ] Rewrite functions type signatures in a final tagless way to improve code modularity
 - [ ] Estimate data processing algorithmic complexity, improve it where possible

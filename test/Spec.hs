@@ -4,6 +4,7 @@ import MiniK
 import Rewrite
 import qualified NormalizedMap
 import qualified Languages.Imp as Imp
+import Debug.Trace
 
 main :: IO ()
 main = defaultMain testSuite
@@ -14,7 +15,8 @@ testSuite =
 
 impTests :: TestTree
 impTests =
-    testGroup "Imp tests" [assignTests, ifTests, whileTests]
+    testGroup "Imp tests" [assignTests, ifTests, whileTests, lawsTests
+        , loadTests]
 
 assignTests :: TestTree
 assignTests =
@@ -40,6 +42,18 @@ whileTests =
         [ incrementTo10
         , checkIsPrime
         ]
+
+lawsTests :: TestTree
+lawsTests =
+    testGroup
+        "Laws tests"
+        [ mapCommutativity ]
+
+loadTests :: TestTree
+loadTests =
+    testGroup
+        "Load tests"
+        [ loadTest ]
 
 {-
     assign(a, 1)
@@ -292,6 +306,99 @@ checkIsPrime =
                         I 1 -> True
                         _ -> error "Flag should be either 0 or 1."
                 _ -> error "Flag is missing from configuration state."
+
+{-
+    assign(c, 3); state: {d: 4, a: 1, b: 2}
+-}
+mapCommutativity :: TestTree
+mapCommutativity =
+    testCase "Add element to exist state" $ do
+        let konfig =
+                Konfiguration
+                    { k =
+                        KSeq
+                            assignC3
+                            KEmpty
+                    , kState = MapCons (Id "d") (I 4)
+                        . MapCons (Id "a") (I 1)
+                        $ MapCons (Id "b") (I 2) MapEmpty
+                    }
+            expectedResult =
+                Konfiguration
+                    { k = KEmpty
+                    , kState = MapCons (Id "a") (I 1)
+                        . MapCons (Id "b") (I 2)
+                        . MapCons (Id "c") (I 3)
+                        $ MapCons (Id "d") (I 4) MapEmpty
+                    }
+            actualResult = rewrite konfig Imp.rewriteRules
+        assertEqual "" expectedResult actualResult
+
+{-
+    assign(a1, 1)
+    while(a1 < 2)
+        assign(a1, a1 + 1)
+        assign(a1, a1)
+        assign(a2, 1)
+        while(a2 < 4)
+            assign(a2, a2 + 1)
+            assign(a2, a1 + a2)
+                assign(a3, 1)
+                while(a3 < 6)
+                    ...
+-}
+loadTest :: TestTree
+loadTest =
+    testCase "Long nested while loop" $ do
+        let konfig =
+                Konfiguration
+                    { k =
+                        KSeq
+                            (whileBody depth)
+                            KEmpty
+                    , kState = MapEmpty
+                    }
+            depth = 62
+            actualResult =
+                traceEvent "Test: long nested while loop - begin" $
+                rewrite konfig Imp.rewriteRules
+            counterVal = NormalizedMap.lookupConcreteId (counterId depth)
+                . NormalizedMap.normalize $ kState actualResult
+            expectedResult = Just $ I 4611686018427387904
+        assertEqual "" expectedResult counterVal
+        traceEvent "Test: long nested while loop - end" $ pure ()
+  where
+    counterId :: Int -> String
+    counterId = ("a" <>) . show
+    whileBody :: Int -> MiniK
+    whileBody depth = whileBody' 1
+      where
+      whileBody' n = let counter = IntId . Id $ counterId n in
+          (KSeq
+              (KSymbol
+                  "assign"
+                  [ KInt counter
+                  , KInt $ I 0
+                  ])
+              (KSymbol
+                  "while"
+                  [ KBool $ LT' counter (I $ n * 2)
+                  , KSeq
+                      (KSymbol
+                          "assign"
+                          [ KInt counter
+                          , KInt (Plus counter (I 1))
+                          ])
+                      (KSeq
+                          (KSymbol
+                              "assign"
+                              [ KInt counter
+                              , KInt $ foldl Plus counter
+                                  $ IntId . Id . counterId
+                                  <$> take n [1..]
+                              ])
+                          if n < depth then whileBody' $ n + 1 else KEmpty)
+                  ]))
 
 assignA1, assignB2, assignC3 :: MiniK
 assignA1 =
