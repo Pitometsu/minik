@@ -7,7 +7,7 @@ import MiniK
 import NormalizedMap (NormalizedMap)
 import qualified NormalizedMap
 import Data.Maybe (fromMaybe)
-import Debug.Trace
+-- import Debug.Trace
 
 -- Check the side condition of a rule
 --
@@ -18,14 +18,14 @@ checkCondition _ (B val) = val
 checkCondition _ (BoolVar _) =
     error "Variable should have been instantiated."
 checkCondition mapTerm (Not boolTerm) =
-    traceEvent "Check condition \"Not\"" $
+    -- traceEvent "Check condition \"Not\"" $
     not (checkCondition mapTerm boolTerm)
 checkCondition mapTerm (And boolTerm1 boolTerm2) =
-    traceEvent "Check condition \"And\"" $
+    -- traceEvent "Check condition \"And\"" $
     checkCondition mapTerm boolTerm1
     && checkCondition mapTerm boolTerm2
 checkCondition mapTerm (LT' intTerm1 intTerm2) =
-    traceEvent "Check condition \"Less than\"" $
+    -- traceEvent "Check condition \"Less than\"" $
     evaluate mapTerm intTerm1
     < evaluate mapTerm intTerm2
 

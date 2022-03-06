@@ -5,12 +5,12 @@ module Rewrite
 
 import MiniK (Konfiguration (..), RewriteRule (..), pattern I, reNormalizeK)
 import qualified Control.Monad as Monad
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import CheckCondition (checkCondition, evaluate)
 import Match (match)
 import Substitute (substitute)
 import qualified NormalizedMap
-import Debug.Trace
+-- import Debug.Trace
 
 -- The rewriting procedure.
 --
@@ -50,20 +50,16 @@ rewriteStep
     :: Konfiguration
     -> [RewriteRule]
     -> Konfiguration
-rewriteStep konfig = rewriteStep ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
+rewriteStep konfig = fromMaybe konfig
+    . rewriteStep' ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
 
 rewriteStep'
     :: Konfiguration
     -> [RewriteRule]
-    -> Konfiguration
-rewriteStep' konfig rewriteRules =
-    traceEvent "Rewrite step" $
-    let results =
-            mapMaybe (applyRewriteRule konfig) rewriteRules
-     in
-        case results of
-            [] -> konfig
-            (konfig' : _) -> konfig'
+    -> Maybe Konfiguration
+rewriteStep' konfig =
+    -- traceEvent "Rewrite step" $
+    listToMaybe . mapMaybe (applyRewriteRule konfig)
 
 -- Fully execute the program by rewriting with the set of rewrite
 -- rules.
@@ -72,12 +68,8 @@ rewrite
     -> [RewriteRule]
     -> Konfiguration
 rewrite konfig rewriteRules =
-    traceEvent "Rewrite" $
-    loop ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
+    -- traceEvent "Rewrite" $
+    fromMaybe konfig $ loop ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
   where
     loop input =
-        let output = rewriteStep' input rewriteRules
-         in
-            if input == output
-                then input
-                else loop output
+        maybe (pure input) loop $ rewriteStep' input rewriteRules

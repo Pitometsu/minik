@@ -89,3 +89,16 @@ So, plan is to:
 - [ ] Estimate data processing algorithmic complexity, improve it where possible
 - [ ] Write load test, profile code to find the bottlenecks, fix them if possible.
 
+Profiling results of load test (average):
+
+``` shell
+test --trace --profile --ta '-p "Load tests"'
+
+Test suite
+  Imp tests
+    Load tests
+      Long nested while loop: OK (0.36s)
+```
+
+After the rewrite refactoring ~32s. (timestamps of events from eventloop is too precise for such a spread).
+

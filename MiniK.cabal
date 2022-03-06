@@ -69,7 +69,7 @@ executable MiniK-exe
       PatternSynonyms
       BlockArguments
       TypeApplications
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l"
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5
@@ -95,7 +95,7 @@ test-suite MiniK-test
       PatternSynonyms
       BlockArguments
       TypeApplications
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l"
+  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5

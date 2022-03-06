@@ -14,7 +14,7 @@ import qualified Data.Map.Lazy as Map
 import Data.Map.Lazy (Map)
 import Data.Function ((&))
 import NormalizedMap (NormalizedMap (..))
-import Debug.Trace
+-- import Debug.Trace
 
 -- Matching is the heart of the rewrite engine.
 --
@@ -40,19 +40,19 @@ class Match term where
 
 instance Match MiniK where
     matchWithSubstitution kTerm (KVar name) subst =
-        traceEvent "Match \"KVar\"" $
+        -- traceEvent "Match \"KVar\"" $
         Just (Substitution.insert name kTerm subst)
     matchWithSubstitution KEmpty KEmpty subst =
-        traceEvent "Match \"KEmpty\"" $
+        -- traceEvent "Match \"KEmpty\"" $
         Just subst
     matchWithSubstitution (KInt intTermKonfig) (KInt intTermRule) subst =
-        traceEvent "Match \"KInt\"" $
+        -- traceEvent "Match \"KInt\"" $
         matchWithSubstitution intTermKonfig intTermRule subst
     matchWithSubstitution (KBool boolTermKonfig) (KBool boolTermRule) subst =
-        traceEvent "Match \"KBool\"" $
+        -- traceEvent "Match \"KBool\"" $
         matchWithSubstitution boolTermKonfig boolTermRule subst
     matchWithSubstitution (KMap mapTermKonfig) (KMap mapTermRule) subst =
-        traceEvent "Match \"KMap\"" $
+        -- traceEvent "Match \"KMap\"" $
         matchWithSubstitution mapTermKonfig mapTermRule subst
 
     matchWithSubstitution
@@ -179,10 +179,10 @@ instance Match NormalizedMap where
         subst
         -- We expect the program configuration to be fully concrete.
         | not (null opaqueKonfig && Map.null symbolicKonfig) =
-            traceEvent "Match \"NormalizedMap\", not concrete"
+            -- traceEvent "Match \"NormalizedMap\", not concrete"
             Nothing
         | otherwise =
-        traceEvent "Match \"NormalizedMap\"" $
+        -- traceEvent "Match \"NormalizedMap\"" $
         do
             (leftToMatch1, matchedWithConcrete) <-
                 matchWithConcrete concreteKonfig concreteRule
@@ -202,7 +202,7 @@ instance Match NormalizedMap where
             -> Map Name IntType
             -> Maybe (Map Name IntType, Substitution)
         matchWithConcrete mapKonfig mapRule =
-          traceEvent "Match \"NormalizedMap\" with concrete ids" $
+          -- traceEvent "Match \"NormalizedMap\" with concrete ids" $
           do
             let intersectionKonfigValues =
                     Map.intersection mapKonfig mapRule
@@ -222,7 +222,7 @@ instance Match NormalizedMap where
             -> Map Name IntType
             -> Maybe (Map Name IntType, Substitution)
         matchWithSymbolic mapKonfig mapRule =
-          traceEvent "Match \"NormalizedMap\" with symbolic vars" $
+          -- traceEvent "Match \"NormalizedMap\" with symbolic vars" $
           do
             matchResult <-
                 generateMatch (Map.toList mapKonfig) (Map.toList mapRule)
@@ -237,7 +237,7 @@ instance Match NormalizedMap where
             -> Maybe Substitution
         matchWithOpaque _ Nothing = Nothing
         matchWithOpaque konfigMap (Just varName) =
-          traceEvent "Match \"NormalizedMap\" with an opaque map" $
+          -- traceEvent "Match \"NormalizedMap\" with an opaque map" $
             let unNormalizedMap =
                     KMap
                     . NormalizedMap.unNormalize
