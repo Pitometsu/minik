@@ -89,7 +89,9 @@ So, plan is to:
 - [ ] Estimate data processing algorithmic complexity, improve it where possible
 - [ ] Write load test, profile code to find the bottlenecks, fix them if possible.
 
-Profiling results of load test (average):
+Profiling results of load test:
+
+1st run
 
 ``` shell
 test --trace --profile --ta '-p "Load tests"'
@@ -100,5 +102,19 @@ Test suite
       Long nested while loop: OK (0.36s)
 ```
 
+From eventloop: 0.026269s - 0.395897s = 0.369628s
+
+2nd run
+
+From eventloop: 0.006678s - 0.376399s = 0.369721s
+
+3d run
+
+From eventloop: 0.004312s - 0.373213s = 0.368901s
+
+Average: 0.369417s
+
+
 After the rewrite refactoring ~32s. (timestamps of events from eventloop is too precise for such a spread).
 
+After making data fields strict ~16s (with strict Map ~17s).

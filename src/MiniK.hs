@@ -32,12 +32,12 @@ type Name = String
 --   - KVar are variables which represent programs themselves
 data MiniK
     = KEmpty
-    | KInt IntType
-    | KBool BoolType
+    | KInt !IntType
+    | KBool !BoolType
     | KMap MapType
-    | KVar Name
-    | KSymbol Name [MiniK]
-    | KSeq MiniK MiniK
+    | KVar !Name
+    | KSymbol !Name ![MiniK]
+    | KSeq !MiniK MiniK
     deriving stock (Show, Eq, Ord)
 
 normalizeK :: MiniK -> [MiniK]
@@ -81,8 +81,8 @@ extractConcreteId _ = Nothing
 -- A type for identifiers inside languages defined in MiniK.
 -- For simplicity, languages may only have 'IntType' identifiers.
 data IdType
-    = Id Name
-    | IdVar Name
+    = Id !Name
+    | IdVar !Name
     deriving stock (Show, Eq, Ord)
 
 retractConcreteId :: IdType -> Name
@@ -90,19 +90,19 @@ retractConcreteId (Id name) = name
 retractConcreteId _ = error "Expecting concrete element of type Id."
 
 data IntType
-    = I Int
-    | IntVar Name
-    | IntId IdType
-    | Plus IntType IntType
-    | Mod IntType IntType
+    = I !Int
+    | IntVar !Name
+    | IntId !IdType
+    | Plus !IntType !IntType
+    | Mod !IntType !IntType
     deriving stock (Show, Eq, Ord)
 
 data BoolType
-    = B Bool
-    | BoolVar Name
-    | Not BoolType
-    | And BoolType BoolType
-    | LT' IntType IntType
+    = B !Bool
+    | BoolVar !Name
+    | Not !BoolType
+    | And !BoolType !BoolType
+    | LT' !IntType !IntType
     deriving stock (Show, Eq, Ord)
 
 -- A type for MiniK maps, used for storing the values identifiers
@@ -110,8 +110,8 @@ data BoolType
 -- For simplicity, these values are restricted to 'IntType'.
 data MapType
     = MapEmpty
-    | MapVar Name
-    | MapCons IdType IntType MapType
+    | MapVar !Name
+    | MapCons !IdType !IntType !MapType
     deriving stock (Show, Eq, Ord)
 
 retractConcreteMap :: MapType -> [(Name, IntType)]
@@ -148,8 +148,8 @@ retractConcreteMap (MapCons idTerm intTerm mapTerm) =
 --
 data Konfiguration =
     Konfiguration
-        { k :: MiniK
-        , kState :: MapType
+        { k :: !MiniK
+        , kState :: !MapType
         }
     deriving stock (Show, Eq, Ord)
 
@@ -173,8 +173,8 @@ canBeRewritten Konfiguration { k } =
 --
 data RewriteRule =
     RewriteRule
-        { left :: Konfiguration
-        , right :: Konfiguration
-        , sideCondition :: BoolType
+        { left :: !Konfiguration
+        , right :: !Konfiguration
+        , sideCondition :: !BoolType
         }
     deriving stock (Show, Eq, Ord)

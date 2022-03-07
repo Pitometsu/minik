@@ -25,9 +25,9 @@ import qualified Data.Map.Lazy as Map
 -- keys are identifiers, which we recognize by their names.
 data NormalizedMap =
     NormalizedMap
-        { opaque :: Maybe Name
-        , symbolic :: Map Name IntType
-        , concrete :: Map Name IntType
+        { opaque :: !(Maybe Name)
+        , symbolic :: !(Map Name IntType)
+        , concrete :: !(Map Name IntType)
         }
 
 map :: (IntType -> IntType) -> NormalizedMap -> NormalizedMap
