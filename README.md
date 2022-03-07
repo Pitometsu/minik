@@ -144,4 +144,5 @@ After the rewrite refactoring ~32s. (timestamps of events from eventloop is too 
 After making data fields strict ~16s (with strict Map ~17s).
 
 With parallel rewrite step ~12s.
-With parallel matches ~14s (get worse).
+With parallel matches ~14s (get worse)
+After rollback parallel for matches, except KSymbol and matchWithConcrete ~11s.
