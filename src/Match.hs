@@ -7,6 +7,8 @@ import Substitution (Substitution)
 import Control.Monad.Logic (LogicT)
 import qualified Control.Monad.Logic as Logic
 import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Maybe (pattern MaybeT, runMaybeT)
+import Control.Parallel.Strategies (parTraversable, rdeepseq, rpar, runEval, using)
 import qualified Substitution
 import Control.Applicative (Alternative (..))
 import qualified NormalizedMap
@@ -65,17 +67,18 @@ instance Match MiniK where
         Substitution.multiUnion
         <$> traverse
             (\(kArg, rArg) -> matchWithSubstitution kArg rArg subst)
-            (zip konfigArgs ruleArgs)
+            (zip konfigArgs ruleArgs) `using` parTraversable rdeepseq
         | otherwise = Nothing
 
     matchWithSubstitution
         (KSeq konfigTerm1 konfigTerm2)
         (KSeq ruleTerm1 ruleTerm2)
         subst
-      = do
-        subst1 <- matchWithSubstitution konfigTerm1 ruleTerm1 subst
-        subst2 <- matchWithSubstitution konfigTerm2 ruleTerm2 subst
-        return (Substitution.union subst1 subst2)
+
+      = runEval $ runMaybeT do
+        subst1 <- MaybeT . rpar $ matchWithSubstitution konfigTerm1 ruleTerm1 subst
+        subst2 <- MaybeT . rpar $ matchWithSubstitution konfigTerm2 ruleTerm2 subst
+        pure $ Substitution.union subst1 subst2
 
     matchWithSubstitution _ _ _ = Nothing
 
@@ -93,18 +96,18 @@ instance Match IntType where
         (Plus konfigIdTerm1 konfigIdTerm2)
         (Plus ruleIdTerm1 ruleIdTerm2)
         subst
-      = do
-        subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
-        subst2 <- matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
+      = runEval $ runMaybeT do
+        subst1 <- MaybeT . rpar $ matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
+        subst2 <- MaybeT . rpar $ matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
         return (Substitution.union subst1 subst2)
 
     matchWithSubstitution
         (Mod konfigIdTerm1 konfigIdTerm2)
         (Mod ruleIdTerm1 ruleIdTerm2)
         subst
-      = do
-        subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
-        subst2 <- matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
+      = runEval $ runMaybeT do
+        subst1 <- MaybeT . rpar $ matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
+        subst2 <- MaybeT . rpar $ matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
         return (Substitution.union subst1 subst2)
 
     matchWithSubstitution _ _ _ = Nothing
@@ -132,18 +135,18 @@ instance Match BoolType where
         (And boolTermKonfig1 boolTermKonfig2)
         (And boolTermRule1 boolTermRule2)
         subst
-      = do
-        subst1 <- matchWithSubstitution boolTermKonfig1 boolTermRule1 subst
-        subst2 <- matchWithSubstitution boolTermKonfig2 boolTermRule2 subst
+      = runEval $ runMaybeT do
+        subst1 <- MaybeT . rpar $ matchWithSubstitution boolTermKonfig1 boolTermRule1 subst
+        subst2 <- MaybeT . rpar $ matchWithSubstitution boolTermKonfig2 boolTermRule2 subst
         return (Substitution.union subst1 subst2)
 
     matchWithSubstitution
         (LT' intTermKonfig1 intTermKonfig2)
         (LT' intTermRule1 intTermRule2)
         subst
-      = do
-        subst1 <- matchWithSubstitution intTermKonfig1 intTermRule1 subst
-        subst2 <- matchWithSubstitution intTermKonfig2 intTermRule2 subst
+      = runEval $ runMaybeT do
+        subst1 <- MaybeT . rpar $ matchWithSubstitution intTermKonfig1 intTermRule1 subst
+        subst2 <- MaybeT . rpar $ matchWithSubstitution intTermKonfig2 intTermRule2 subst
         return (Substitution.union subst1 subst2)
 
     matchWithSubstitution _ _ _ = Nothing
@@ -215,6 +218,7 @@ instance Match NormalizedMap where
                 traverse
                     (uncurry matchElements)
                     (zip intersectionKonfigValues intersectionRuleValues)
+                `using` parTraversable rdeepseq
             return (difference, Substitution.multiUnion matchedValues)
 
         matchWithSymbolic

@@ -34,18 +34,20 @@ As I understand, the current data flow is:
 - use right side of the rewrite rule as a result, repeat with it, until there's no rules that matches left
 - return substituted right side of the latest matched rewrite rule as a result of evaluation.
 
-???: Can the current data flow itself be made more efficient by design (not only implementation)?
+???: Can the current data flow itself be made more efficient by design (not only implementation)? Possible, if rewrite rules could apply simultaneously, but that would be a whole design change.
 
 It can't be concurrent if rules order matter, but it can be run in parallel (also there could be used other data structure instead of [] to speedup results concatination back: difference list, or LogicT, or Stream from steamly library, or Par from monad-par).
 
 ``` haskell
 rewriteStep' konfig rewriteRules =
-    Logic.observeT @Maybe $ (lift . applyRewriteRule konfig) `parBind` (scatter rewriteRules :: LogicT Maybe RewriteRule)
+    Logic.observeT $ (lift . applyRewriteRule konfig) `parBind` scatter rewriteRules
   where
     parBind f = withStrategy (parTraversable rdeepseq) . (=<<) f
 ```
 
 But it require `Traversable (LogicT m)` which is complicated (here's an implementation, but don't want to add extra dependensies like lenses for that small challenge: https://github.com/lih/BHR/blob/677b5fbe36578819fe9cb77e566475df8afb0b62/definitive-base/src/Algebra/Monad/Logic.hs#L23).
+
+Also `Traversable (LogicT m)` would help to parallel the `generateMatch`.
 
 Maybe in general in worth to implement KSeq similar to LogicT, with a parallel Functor instance -- for better performance.  But at the moment it's enough to use [] intermediate representation.
 
@@ -142,3 +144,4 @@ After the rewrite refactoring ~32s. (timestamps of events from eventloop is too 
 After making data fields strict ~16s (with strict Map ~17s).
 
 With parallel rewrite step ~12s.
+With parallel matches ~14s (get worse).

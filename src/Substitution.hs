@@ -10,15 +10,19 @@ module Substitution
     ) where
 
 import MiniK
+import Control.DeepSeq (type NFData)
 import Data.Map.Lazy (Map)
 import Data.Maybe (mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Map.Lazy as Map
+import GHC.Generics (type Generic)
 
 -- A substitution is an association between variables and
 -- MiniK terms.
-newtype Substitution = Substitution (Map Name MiniK) deriving stock Show
+newtype Substitution = Substitution (Map Name MiniK)
+  deriving stock (Show, Generic)
+  deriving anyclass NFData
 
 empty :: Substitution
 empty = Substitution Map.empty
