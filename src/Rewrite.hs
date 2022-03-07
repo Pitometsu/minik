@@ -3,6 +3,7 @@ module Rewrite
     , rewriteStep
     ) where
 
+import Control.Parallel.Strategies (parTraversable, rdeepseq, withStrategy)
 import MiniK (Konfiguration (..), RewriteRule (..), pattern I, reNormalizeK)
 import qualified Control.Monad as Monad
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
@@ -59,7 +60,9 @@ rewriteStep'
     -> Maybe Konfiguration
 rewriteStep' konfig =
     -- traceEvent "Rewrite step" $
-    listToMaybe . mapMaybe (applyRewriteRule konfig)
+    listToMaybe . parMapMaybe (applyRewriteRule konfig)
+  where
+    parMapMaybe f = withStrategy (parTraversable rdeepseq) . mapMaybe f
 
 -- Fully execute the program by rewriting with the set of rewrite
 -- rules.

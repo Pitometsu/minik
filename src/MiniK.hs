@@ -20,6 +20,9 @@ module MiniK
     , reNormalizeK
     ) where
 
+import Control.DeepSeq (type NFData)
+import GHC.Generics (type Generic)
+
 type Name = String
 
 -- The AST of the MiniK language for describing computations of
@@ -38,7 +41,8 @@ data MiniK
     | KVar !Name
     | KSymbol !Name ![MiniK]
     | KSeq !MiniK MiniK
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 normalizeK :: MiniK -> [MiniK]
 normalizeK term = normalizeK' term []
@@ -83,7 +87,8 @@ extractConcreteId _ = Nothing
 data IdType
     = Id !Name
     | IdVar !Name
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 retractConcreteId :: IdType -> Name
 retractConcreteId (Id name) = name
@@ -95,7 +100,8 @@ data IntType
     | IntId !IdType
     | Plus !IntType !IntType
     | Mod !IntType !IntType
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 data BoolType
     = B !Bool
@@ -103,7 +109,8 @@ data BoolType
     | Not !BoolType
     | And !BoolType !BoolType
     | LT' !IntType !IntType
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
@@ -112,7 +119,8 @@ data MapType
     = MapEmpty
     | MapVar !Name
     | MapCons !IdType !IntType !MapType
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 retractConcreteMap :: MapType -> [(Name, IntType)]
 retractConcreteMap (MapVar _) =
@@ -151,7 +159,8 @@ data Konfiguration =
         { k :: !MiniK
         , kState :: !MapType
         }
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
 
 -- Can the program be rewritten further?
 canBeRewritten :: Konfiguration -> Bool
@@ -177,4 +186,5 @@ data RewriteRule =
         , right :: !Konfiguration
         , sideCondition :: !BoolType
         }
-    deriving stock (Show, Eq, Ord)
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData

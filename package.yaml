@@ -26,6 +26,8 @@ dependencies:
 - logict
 - tasty
 - tasty-hunit
+- parallel
+- deepseq
 
 ghc-options:
   - -Wall
@@ -76,3 +78,5 @@ default-extensions:
   - PatternSynonyms
   - BlockArguments
   - TypeApplications
+  - DeriveGeneric
+  - DeriveAnyClass

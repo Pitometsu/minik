@@ -45,11 +45,15 @@ library
       PatternSynonyms
       BlockArguments
       TypeApplications
+      DeriveGeneric
+      DeriveAnyClass
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
   build-depends:
       base >=4.7 && <5
     , containers
+    , deepseq
     , logict
+    , parallel
     , tasty
     , tasty-hunit
     , transformers
@@ -69,12 +73,16 @@ executable MiniK-exe
       PatternSynonyms
       BlockArguments
       TypeApplications
+      DeriveGeneric
+      DeriveAnyClass
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5
     , containers
+    , deepseq
     , logict
+    , parallel
     , tasty
     , tasty-hunit
     , transformers
@@ -95,12 +103,16 @@ test-suite MiniK-test
       PatternSynonyms
       BlockArguments
       TypeApplications
+      DeriveGeneric
+      DeriveAnyClass
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5
     , containers
+    , deepseq
     , logict
+    , parallel
     , tasty
     , tasty-hunit
     , transformers

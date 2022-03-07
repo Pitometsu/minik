@@ -27,6 +27,28 @@ This assessment is desgined to mimic as much as possible the responsibilities yo
 
 Obviously, it would be easier, faster and most effecient -- to refactor the data structures first to encode business logic in elegant way with most suitable type guaranties, which guide appropriate functions refactoring. And do necessary optimizations in bottleneck places after that. But I choose other way: find and make step-by-step least necessary fixes to be able compare performance changes. Which take a lot more time, unfortunatelly, but corresponds to the task requirements. Also, I'll try to avoid make changes in the target language semantic (an Imp), and appropriate matching logic (or make a small necessary step-by-step fixes and performance improvements on demand only).
 
+As I understand, the current data flow is:
+- iterate over list of rewrite rules unless one's left side match the tree of program's AST and State (and rule's condition is satisfied)
+- save matched substitutions to the substitution Map (using State to dereference identifiers)
+- substitute matches to the right side of that rewrite rule (AST and State)
+- use right side of the rewrite rule as a result, repeat with it, until there's no rules that matches left
+- return substituted right side of the latest matched rewrite rule as a result of evaluation.
+
+???: Can the current data flow itself be made more efficient by design (not only implementation)?
+
+It can't be concurrent if rules order matter, but it can be run in parallel (also there could be used other data structure instead of [] to speedup results concatination back: difference list, or LogicT, or Stream from steamly library, or Par from monad-par).
+
+``` haskell
+rewriteStep' konfig rewriteRules =
+    Logic.observeT @Maybe $ (lift . applyRewriteRule konfig) `parBind` (scatter rewriteRules :: LogicT Maybe RewriteRule)
+  where
+    parBind f = withStrategy (parTraversable rdeepseq) . (=<<) f
+```
+
+But it require `Traversable (LogicT m)` which is complicated (here's an implementation, but don't want to add extra dependensies like lenses for that small challenge: https://github.com/lih/BHR/blob/677b5fbe36578819fe9cb77e566475df8afb0b62/definitive-base/src/Algebra/Monad/Logic.hs#L23).
+
+Maybe in general in worth to implement KSeq similar to LogicT, with a parallel Functor instance -- for better performance.  But at the moment it's enough to use [] intermediate representation.
+
 TODO: evaluate RHS of assign
 TODO: evaluate nested sequences, e.g. by subsequential matching
 ???: how to introduce new vars for integers evaluation
@@ -94,7 +116,7 @@ Profiling results of load test:
 1st run
 
 ``` shell
-test --trace --profile --ta '-p "Load tests"'
+stack test --trace --profile --ta '-p "Load tests"'
 
 Test suite
   Imp tests
@@ -118,3 +140,5 @@ Average: 0.369417s
 After the rewrite refactoring ~32s. (timestamps of events from eventloop is too precise for such a spread).
 
 After making data fields strict ~16s (with strict Map ~17s).
+
+With parallel rewrite step ~12s.
