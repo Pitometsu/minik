@@ -33,16 +33,51 @@ type Name = String
 --   identified by the name of the symbol
 --   - KInt, KBool, KMap are the only types allowed in programs
 --   - KVar are variables which represent programs themselves
-data MiniK
+data KSeqP m
     = KEmpty
-    | KInt !IntType
-    | KBool !BoolType
-    | KMap MapType
-    | KVar !Name
-    | KSymbol !Name ![MiniK]
-    | KSeq !MiniK MiniK
+    -- | name, body, tail
+    | KSymbol !Name ![m (KTermP m)] (m (KSeqP m))
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+data KTermP m
+    = KExpr !(m (KExprP m))
+    | KSeq !(m (KSeqP m))
+
+data KExprP m
+    = KInt !(m (IntType m))
+    | KBool !(m (BoolType m))
+    | KMap (m (MapType m))
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
+
+type KMiniK = KSeqP Id
+type KMiniKVar = Var (KSeqP Var)
+
+-- data KType
+--     = KTypeId
+--     | KTypeInt
+--     | KTypeBool
+--     | KTypeMap
+
+-- data KTerm :: KType -> Type where
+--     Id :: !Name -> KTerm KTypeId
+--     Ref :: !(KTerm KTypeId) -> KTerm KTypeInt
+--     I :: !Int -> KTerm KTypeInt
+--     Plus :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeInt
+--     Mod :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeInt
+--     B :: !Bool -> KTerm KTypeBool
+--     Not :: !(KTerm KTypeBool) -> KTerm KTypeBool
+--     And :: !(KTerm KTypeBool) -> !(KTerm KTypeBool) -> KTerm KTypeBool
+--     LT' :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeBool
+--     KMap :: !MapType -> KTerm KTypeMap
+--     deriving stock (Show, Eq, Ord, Generic)
+--     deriving anyclass NFData
+
+data Var a
+    = KVar !Name
+    | Concrete a
+
 
 normalizeK :: MiniK -> [MiniK]
 normalizeK term = normalizeK' term []
@@ -84,43 +119,43 @@ extractConcreteId _ = Nothing
 
 -- A type for identifiers inside languages defined in MiniK.
 -- For simplicity, languages may only have 'IntType' identifiers.
-data IdType
-    = Id !Name
-    | IdVar !Name
+newtype IdType = Id { retractConcreteId :: !Name }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
 
-retractConcreteId :: IdType -> Name
-retractConcreteId (Id name) = name
-retractConcreteId _ = error "Expecting concrete element of type Id."
-
-data IntType
+data IntTypeP m
     = I !Int
-    | IntVar !Name
-    | IntId !IdType
-    | Plus !IntType !IntType
-    | Mod !IntType !IntType
+    | Ref !(m IdType)
+    | Plus !(m IntType) !(m IntType)
+    | Mod !(m IntType) !(m IntType)
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
 
-data BoolType
+type IntType = IntTypeP Id
+type IntTypeVar = Var (IntTypeP Var)
+
+data BoolTypeP m
     = B !Bool
-    | BoolVar !Name
-    | Not !BoolType
-    | And !BoolType !BoolType
-    | LT' !IntType !IntType
+    | Not !(m BoolType)
+    | And !(m BoolType) !(m BoolType)
+    | LT' !(m IntType) !(m IntType)
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+type BoolType = BoolTypeP Id
+type BoolTypeVar = Var (BoolTypeP Var)
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
 -- For simplicity, these values are restricted to 'IntType'.
-data MapType
+data MapTypeP m
     = MapEmpty
-    | MapVar !Name
-    | MapCons !IdType !IntType !MapType
+    | MapCons !(m IdType) !(m IntType) !(m MapType)
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+type MapType = MapTypeP Id
+type MapTypeVar = Var (MapType Var)
 
 retractConcreteMap :: MapType -> [(Name, IntType)]
 retractConcreteMap (MapVar _) =
@@ -154,13 +189,16 @@ retractConcreteMap (MapCons idTerm intTerm mapTerm) =
 --   - X is an IdType variable
 --   - M is a MapType variable, here meaning the rest of the map
 --
-data Konfiguration =
+data KonfigurationP m =
     Konfiguration
-        { k :: !MiniK
-        , kState :: !MapType
+        { k :: !(m MiniK)
+        , kState :: !(m MapType)
         }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+type Konfiguration = Konfiguration Id
+type KonfigurationVar = Konfiguration Var
 
 -- Can the program be rewritten further?
 canBeRewritten :: Konfiguration -> Bool
@@ -183,7 +221,7 @@ canBeRewritten Konfiguration { k } =
 data RewriteRule =
     RewriteRule
         { left :: !Konfiguration
-        , right :: !Konfiguration
+        , right :: !KonfigurationVar
         , sideCondition :: !BoolType
         }
     deriving stock (Show, Eq, Ord, Generic)

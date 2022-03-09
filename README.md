@@ -34,6 +34,10 @@ As I understand, the current data flow is:
 - use right side of the rewrite rule as a result, repeat with it, until there's no rules that matches left
 - return substituted right side of the latest matched rewrite rule as a result of evaluation.
 
+Maps preserve associativity and commutativity by normalization and key sorting. For commutativity of MiniK AST (KSeq nodes) I added normalization too (before the whole evaluation and after each rewriting).
+
+???: Can normalization speed be improved? By encoding normalization invariant in KSeq data design.
+
 ???: Can the current data flow itself be made more efficient by design (not only implementation)? Possible, if rewrite rules could apply simultaneously, but that would be a whole design change.
 
 It can't be concurrent if rules order matter, but it can be run in parallel (also there could be used other data structure instead of [] to speedup results concatination back: difference list, or LogicT, or Stream from steamly library, or Par from monad-par).
@@ -66,6 +70,8 @@ TODO: not one rule to substitute per time, but back-tracking via Logic
 FIXME: target language AST types are not sound. Make building incorrect AST statically impossible
 ???: should be such semantic properties as commutativity and associativity be added to match not syntactically exact, by semantically equal rules (of + and * for int, or for bool operations)? Or keep that property to be defined as a rule of target language itsel explicitly?
 ???: Of course, it would be better to not limit state values and identifiers by Int type only. Anyway, andy simple type inference gives target langue more expressive power then just types hardcoded in the AST sorts.
+???: is MapType via MapCons implementation necessary as non-efficient? Would opaque interface like usual Map works?
+???: is NormalizedMap matching efficient, can it be speed up?
 
 problems of the target language:
 - lexical bindings
@@ -110,8 +116,8 @@ So, plan is to:
 - [ ] Write more tests (Add TestImp language for that)
 - [ ] Rewrite datatypes as GADT to impove code maintainability
 - [ ] Rewrite functions type signatures in a final tagless way to improve code modularity
-- [ ] Estimate data processing algorithmic complexity, improve it where possible
-- [ ] Write load test, profile code to find the bottlenecks, fix them if possible.
+- [X] Estimate data processing algorithmic complexity, improve it where possible
+- [X] Write load test, profile code to find the bottlenecks, fix them if possible.
 
 Profiling results of load test:
 
@@ -146,3 +152,6 @@ After making data fields strict ~16s (with strict Map ~17s).
 With parallel rewrite step ~12s.
 With parallel matches ~14s (get worse)
 After rollback parallel for matches, except KSymbol and matchWithConcrete ~11s.
+
+
+Made a decision to avoid GADTs: they are not strictly necessary for good enough type guaranties of that language.  However the KSymbol type could be indexed with product of appropriate symbol and type list of KType elements (to avoid error with wrong symbol AST).
