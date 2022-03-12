@@ -155,3 +155,14 @@ After rollback parallel for matches, except KSymbol and matchWithConcrete ~11s.
 
 
 Made a decision to avoid GADTs: they are not strictly necessary for good enough type guaranties of that language.  However the KSymbol type could be indexed with product of appropriate symbol and type list of KType elements (to avoid error with wrong symbol AST).
+
+Looks like it still required to have an KSeq on the right side of the RewriteRule to concatinate the matching results. To avoid it and keep the results normalized without extra steps, it would require matching alhorithm changing (making more complicated), which is kinda out of scope of the task.
+
+
+What if int term like a + b will be matched with a + (IntVar x)? The Substitution contains MiniK values only, so the result of substitution would be a + (KInt b)? Which make no sense. Currently it uses `retractIntTerm :: MiniK -> IntType` unsafe function for that. Most proper approach would be to use GADT here. But I would just few Maps per each time (for deriving instances simplicity).
+
+Looks like we can skip initial `coversAllRuleVars` check, because positive case is not rely on it, and rely on later Maybe result (to not spend program's time on checking it twice, and do it in typesafe way for better maintainability).
+
+???: can we speedup `extractVariables` (e.g. by passing result cache as an additional parameter)? And `substituteVariable` (use some kind of function that build the tree instead of passing values?). Make them parallel.
+
+TODO: try to speedup data by using unboxed values.

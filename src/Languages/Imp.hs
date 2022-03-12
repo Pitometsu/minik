@@ -13,25 +13,26 @@ assign =
         { left =
             Konfiguration
                 { k = K $
-                    (KSymbol
+                    KSymbol
                         "assign"
-                        [ K . KInt . Ref $ KVar @OfIdType "X"
-                        , K . KInt $ KVar @OfIntType "I"
+                        [ KInt . K . Ref $ KVar @OfIdType "X"
+                        , KInt $ KVar @OfIntType "I"
                         ]
-                        $ KVar @OfMiniK "Rest")
-                , kState = KVar @(OfMapType Redex) "M"
+                        $ KVar @(OfMiniK Value) "Rest"
+                , kState = KVar @(OfMapType Value) "M"
                 }
         , right =
             Konfiguration
-                { k = KVar @OfMiniK "Rest"
+                { k = KVal $ KVar @(OfMiniK Redex) "Rest"
                 , kState = K $
                     MapCons
                         (KVar @OfIdType "X")
                         (KVar @OfIntType "I")
-                        (KVar @OfMapType "M")
+                        $ KVar @(OfMapType Value) "M"
                 }
-        , sideCondition = B True
+        , sideCondition = K $ B True
         }
+
 {-
     rule
         <k> ( if(B:Bool)
@@ -49,21 +50,22 @@ ifTrue =
         { left =
             Konfiguration
                 { k = K $
-                    (KSymbol
+                    KSymbol
                         "if"
-                        [ K . KBool $ KVar "B"
-                        , KVar "TrueBranch"
-                        , KVar "FalseBranch"
+                        [ KBool $ KVar @OfBoolType "B"
+                        , KExp $ KVar @(OfMiniK Value) "TrueBranch"
+                        , KExp $ KVar @(OfMiniK Value) "FalseBranch"
                         ]
-                    $ (KVar "Rest"))
-                , kState = KVar "M"
+                        $ KVar @(OfMiniK Value) "Rest"
+                , kState = KVar @(OfMapType Value) "M"
                 }
         , right =
             Konfiguration
-                { k = KSeq (KVar "TrueBranch") (KVar "Rest")
-                , kState = MapVar "M"
+                { k = KSeq (KVar @(OfMiniK Redex) "TrueBranch")
+                      $ KVar @(OfMiniK Redex) "Rest"
+                , kState = KVar @(OfMapType Value) "M"
                 }
-        , sideCondition = BoolVar "B"
+        , sideCondition = KVar "B"
         }
 
 {-
@@ -83,24 +85,23 @@ ifFalse =
     RewriteRule
         { left =
             Konfiguration
-                { k =
-                    KSeq
-                        (KSymbol
-                            "if"
-                            [ KBool (BoolVar "B")
-                            , KVar "TrueBranch"
-                            , KVar "FalseBranch"
-                            ]
-                        )
-                        (KVar "Rest")
-                , kState = MapVar "M"
+                { k = K $
+                    KSymbol
+                        "if"
+                        [ KBool $ KVar "B"
+                        , KExp $ KVar "TrueBranch"
+                        , KExp $ KVar "FalseBranch"
+                        ]
+                        $ KVar "Rest"
+                , kState = KVar "M"
                 }
         , right =
             Konfiguration
-                { k = KSeq (KVar "FalseBranch") (KVar "Rest")
-                , kState = MapVar "M"
+                { k = KSeq (KVar "FalseBranch")
+                      $ KVar "Rest"
+                , kState = KVar "M"
                 }
-        , sideCondition = Not (BoolVar "B")
+        , sideCondition = K . Not $ KVar "B"
         }
 {-
     rule
@@ -118,42 +119,35 @@ while =
     RewriteRule
         { left =
             Konfiguration
-                { k =
-                    KSeq
-                        (KSymbol
-                            "while"
-                            [ KBool (BoolVar "B")
-                            , KVar "WhileBody"
-                            ]
-                        )
-                        (KVar "Rest")
-                , kState = MapVar "M"
+                { k = K $
+                    KSymbol
+                        "while"
+                        [ KBool $ KVar "B"
+                        , KExp $ KVar "WhileBody"
+                        ]
+                        $ KVar "Rest"
+                , kState = KVar "M"
                 }
         , right =
             Konfiguration
-                { k =
-                    KSeq
-                        (KSymbol
-                            "if"
-                            [ KBool (BoolVar "B")
-                            , KSeq
-                                (KVar "WhileBody")
-                                (KSeq
-                                    (KSymbol
-                                        "while"
-                                        [ KBool (BoolVar "B")
-                                        , KVar "WhileBody"
-                                        ]
-                                    )
-                                    KEmpty
-                                )
-                            , KEmpty
-                            ]
-                        )
-                        (KVar "Rest")
-                , kState = MapVar "M"
+                { k = KVal . K $
+                    KSymbol
+                        "if"
+                        [ KBool $ KVar "B"
+                        , KExp $ KSeq
+                            (KVar "WhileBody")
+                            (K $ KSymbol
+                                "while"
+                                [ KBool $ KVar "B"
+                                , KExp . KVal $ KVar "WhileBody"
+                                ]
+                                . KVal $ K KEmpty)
+                        , KExp . KVal $ K KEmpty
+                        ]
+                        . KVal $ KVar "Rest"
+                , kState = KVar "M"
                 }
-        , sideCondition = B True
+        , sideCondition = K $ B True
         }
 
 rewriteRules :: [RewriteRule]

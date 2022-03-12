@@ -230,7 +230,7 @@ instance Match NormalizedMap where
                 generateMatch (Map.toList mapKonfig) (Map.toList mapRule)
                 & Logic.observeT
             let difference =
-                    Map.withoutKeys mapKonfig (Substitution.getIds matchResult)
+                    Map.withoutKeys mapKonfig (Substitution.getIds matchResult) -- ???: getIds for what
             return (difference, matchResult)
 
         matchWithOpaque

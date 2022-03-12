@@ -88,3 +88,5 @@ default-extensions:
   - TypeFamilies
   - DefaultSignatures
   - DataKinds
+  - TypeSynonymInstances
+  - TypeOperators

@@ -92,24 +92,24 @@ union
             Map.union concrete1 concrete2
         }
 
-normalize :: MapType -> NormalizedMap
-normalize (MapVar name) =
+normalize :: MapTypeVar -> NormalizedMap
+normalize (KVar name) =
     NormalizedMap
         { opaque = Just name
         , symbolic = Map.empty
         , concrete = Map.empty
         }
-normalize MapEmpty = empty
-normalize (MapCons idTerm intTerm mapTerm) =
+normalize (K MapEmpty) = empty
+normalize (K (MapCons idTerm intTerm mapTerm)) =
     case idTerm of
-        IdVar name ->
+        KVar name ->
             NormalizedMap
                 { opaque = Nothing
                 , symbolic = Map.singleton name intTerm
                 , concrete = Map.empty
                 }
             `union` normalize mapTerm
-        Id name ->
+        K (Id name) ->
             NormalizedMap
                 { opaque = Nothing
                 , symbolic = Map.empty
@@ -117,7 +117,7 @@ normalize (MapCons idTerm intTerm mapTerm) =
                 }
             `union` normalize mapTerm
 
-unNormalize :: NormalizedMap -> MapType
+unNormalize :: NormalizedMap -> MapTypeVar
 unNormalize
     nMap@NormalizedMap
         { opaque
@@ -130,17 +130,17 @@ unNormalize
                 Map.mapKeys Id concrete
                 & Map.toList
             symbolic' =
-                Map.mapKeys IdVar symbolic
+                Map.mapKeys KVar symbolic
                 & Map.toList
             elements = symbolic' <> concrete'
          in
             case opaque of
                 Just varName ->
-                    foldr (uncurry MapCons) (MapVar varName) elements
+                    foldr (uncurry MapCons) (KVar varName) elements
                 Nothing ->
                     foldr (uncurry MapCons) MapEmpty elements
 
-renormalize :: MapType -> MapType
+renormalize :: MapTypeVar -> MapTypeVar
 renormalize = unNormalize . normalize
 
 lookupConcreteId :: Name -> NormalizedMap -> Maybe IntType

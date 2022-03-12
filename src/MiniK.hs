@@ -22,41 +22,68 @@ module MiniK
     where
 
 import Control.DeepSeq (type NFData)
-import Data.Kind (Type)
+import Data.Kind (Constraint, Type)
 import GHC.Generics (type Generic)
 
 type Name = String
 
 type IntValue = Int
 
+deriving stock instance Generic IntValue
+
+-- | Is certain term contain meta-variables
 data Variability = Variable | Concrete
      deriving stock (Show, Eq, Ord, Generic)
      deriving anyclass NFData
 
-type family Of (v :: Variability) (t :: Variability -> Type) where
-  Of Concrete t = t Concrete
-  Of Variable t = Var t
+type family VariabOf (v :: Variability) (t :: Variability -> Type) where
+  VariabOf v Thunk = Thunk v
+  VariabOf Concrete t = t Concrete
+  VariabOf Variable t = Var t
 
+type family Variab (t :: Type) where
+  Variab (t v) = VariabOf v t
+
+-- | Meta-variable of term
 data Var (t :: Variability -> Type)
     = KVar !Name
     | K (t Variable)
     | KAll (t Concrete)
 
-deriving stock instance (Show (a Variable), Show (a Concrete))  => Show (Var a)
-deriving stock instance (Eq (a Variable), Eq (a Concrete)) => Eq (Var a)
-deriving stock instance (Ord (a Variable), Ord (a Concrete)) => Ord (Var a)
-deriving stock instance (Generic (a Variable), Generic (a Concrete)) => Generic (Var a)
-deriving anyclass instance (Generic (a Variable), Generic (a Concrete), NFData (a Variable), NFData (a Concrete)) => NFData (Var a)
+deriving stock instance With Show [a Variable, a Concrete] => Show (Var a)
+deriving stock instance With Eq [a Variable, a Concrete] => Eq (Var a)
+deriving stock instance With Ord [a Variable, a Concrete] => Ord (Var a)
+deriving stock instance With Generic [a Variable, a Concrete] => Generic (Var a)
+deriving anyclass instance
+    WithAll [Generic, NFData] [a Variable, a Concrete] => NFData (Var a)
 
+-- | Is certain term evaluated in normal form
 data Evaluated = Redex | Value
      deriving stock (Show, Eq, Ord, Generic)
      deriving anyclass NFData
 
-type family Normal (v :: Evaluated) (t :: Type)
-type instance Normal _ (OfIdType t) = OfIdType t
-type instance Normal _ (Var t) = Var t
-type instance Normal Redex (OfIntType t) = OfIntType t
-type instance Normal Value (OfIntType Concrete) = IntValue
+type family NormalOf (e :: Evaluated) (t :: Type)
+
+type instance NormalOf _ (OfIdType v) = OfIdType v
+type instance NormalOf Redex (OfIntType v) = OfIntType v
+type instance NormalOf Value (OfIntType Concrete) = IntValue
+type instance NormalOf _ (Var t) = Var t
+
+type family Normal (t :: Type)
+
+type instance Normal (OfMiniK Redex v) = Thunk v
+type instance Normal (OfMiniK Value v) = OfMiniK Value v
+
+data Thunk (v :: Variability)
+    = KVal !(Variab (OfMiniK Redex v))
+    | KSeq !(Variab (OfMiniK Redex v)) (Variab (OfMiniK Redex v))
+
+deriving stock instance Show (Variab (OfMiniK Redex v)) => Show (Thunk v)
+deriving stock instance Eq (Variab (OfMiniK Redex v)) => Eq (Thunk v)
+deriving stock instance Ord (Variab (OfMiniK Redex v)) => Ord (Thunk v)
+deriving stock instance Generic (Variab (OfMiniK Redex v)) => Generic (Thunk v)
+deriving anyclass instance
+    WithAll [Generic, NFData] '[Variab (OfMiniK Redex v)] => NFData (Thunk v)
 
 -- The AST of the MiniK language for describing computations of
 -- user-defined programming languages.
@@ -66,31 +93,86 @@ type instance Normal Value (OfIntType Concrete) = IntValue
 --   identified by the name of the symbol
 --   - KInt, KBool, KMap are the only types allowed in programs
 --   - KVar are variables which represent programs themselves
-data OfMiniK (v :: Variability)
+data OfMiniK (e :: Evaluated) (v :: Variability)
     = KEmpty
     -- | name, body, tail
-    | KSymbol !Name ![Of v OfKTerm] (Of v OfMiniK)
+    | KSymbol !Name ![OfKTerm e v] (Variab (Normal (OfMiniK e v)))
 
-deriving stock instance (Show (Of m OfMiniK), Show (Of m OfKTerm)) => Show (OfMiniK m)
-deriving stock instance (Eq (Of m OfMiniK), Eq (Of m OfKTerm)) => Eq (OfMiniK m)
-deriving stock instance (Ord (Of m OfMiniK), Ord (Of m OfKTerm)) => Ord (OfMiniK m)
-deriving stock instance (Generic (Of m OfMiniK), Generic (Of m OfKTerm)) => Generic (OfMiniK m)
-deriving anyclass instance (Generic (Of m OfMiniK), Generic (Of m OfKTerm), NFData (Of m OfMiniK), NFData (Of m OfKTerm)) => NFData (OfMiniK m)
+deriving stock instance
+    With Show
+        [ Variab (Normal (OfMiniK e v))
+        , OfKTerm e v ]
+    => Show (OfMiniK e v)
+deriving stock instance
+    With Eq
+        [ Variab (Normal (OfMiniK e v))
+        , OfKTerm e v ]
+    => Eq (OfMiniK e v)
+deriving stock instance
+    With Ord
+        [ Variab (Normal (OfMiniK e v))
+        , OfKTerm e v ]
+    => Ord (OfMiniK e v)
+deriving stock instance
+    With Generic
+        [ Variab (Normal (OfMiniK e v))
+        , OfKTerm e v ]
+    => Generic (OfMiniK e v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ Variab (Normal (OfMiniK e v))
+        , OfKTerm e v ]
+    => NFData (OfMiniK e v)
 
-data OfKTerm (v :: Variability)
-    = KInt !(Of v OfIntType)
-    | KBool !(Of v OfBoolType)
-    | KMap (Of v (OfMapType Redex))
-    | KSeq !(Of v OfMiniK)
+type MiniK = Variab (Normal (OfMiniK Value Concrete))
+type MiniKVar = Variab (Normal (OfMiniK Redex Variable))
+type MiniKVarValue = Variab (Normal (OfMiniK Value Variable))
 
-deriving stock instance (Show (Of m OfIntType), Show (Of m OfBoolType), Show (Of m (OfMapType Redex)), Show (Of m OfMiniK)) => Show (OfKTerm m)
-deriving stock instance (Eq (Of m OfIntType), Eq (Of m OfBoolType), Eq (Of m (OfMapType Redex)), Eq (Of m OfMiniK)) => Eq (OfKTerm m)
-deriving stock instance (Ord (Of m OfIntType), Ord (Of m OfBoolType), Ord (Of m (OfMapType Redex)), Ord (Of m OfMiniK)) => Ord (OfKTerm m)
-deriving stock instance (Generic (Of m OfIntType), Generic (Of m OfBoolType), Generic (Of m (OfMapType Redex)), Generic (Of m OfMiniK)) => Generic (OfKTerm m)
-deriving anyclass instance (Generic (Of m OfIntType), Generic (Of m OfBoolType), Generic (Of m (OfMapType Redex)), Generic (Of m OfMiniK), NFData (Of m OfIntType), NFData (Of m OfBoolType), NFData (Of m (OfMapType Redex)), NFData (Of m OfMiniK)) => NFData (OfKTerm m)
+data OfKTerm (e :: Evaluated) (v :: Variability)
+    = KInt !(VariabOf v OfIntType)
+    | KBool !(VariabOf v OfBoolType)
+    | KMap (VariabOf v (OfMapType Redex))
+    | KExp !(Variab (Normal (OfMiniK e v)))
 
-type KMiniK = Of Concrete OfMiniK
-type KMiniKVar = Of Variable OfMiniK
+deriving stock instance
+    With Show
+        [ VariabOf v OfIntType
+        , VariabOf v OfBoolType
+        , VariabOf v (OfMapType Redex)
+        , Variab (Normal (OfMiniK e v)) ]
+    => Show (OfKTerm e v)
+deriving stock instance
+    With Eq
+        [ VariabOf v OfIntType
+        , VariabOf v OfBoolType
+        , VariabOf v (OfMapType Redex)
+        , Variab (Normal (OfMiniK e v)) ]
+    => Eq (OfKTerm e v)
+deriving stock instance
+    With Ord
+        [ VariabOf v OfIntType
+        , VariabOf v OfBoolType
+        , VariabOf v (OfMapType Redex)
+        , Variab (Normal (OfMiniK e v)) ]
+    => Ord (OfKTerm e v)
+deriving stock instance
+    With Generic
+        [ VariabOf v OfIntType
+        , VariabOf v OfBoolType
+        , VariabOf v (OfMapType Redex)
+        , Variab (Normal (OfMiniK e v)) ]
+    => Generic (OfKTerm e v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ VariabOf v OfIntType
+        , VariabOf v OfBoolType
+        , VariabOf v (OfMapType Redex)
+        , Variab (Normal (OfMiniK e v)) ]
+    => NFData (OfKTerm e v)
+
+type KTerm = Variab (Normal (OfKTerm Value Concrete))
+type KTermVar = Variab (Normal (OfKTerm Redex Variable))
+type KTermVarValue = Variab (Normal (OfKTerm Value Variable))
 
 -- data KType
 --     = KTypeId
@@ -133,26 +215,6 @@ type KMiniKVar = Of Variable OfMiniK
 
 --
 
--- retractIntTerm :: MiniK -> IntType
--- retractIntTerm (KInt intTerm) = intTerm
--- retractIntTerm _ = error "Expecting element of type Int."
-
--- retractBoolTerm :: MiniK -> BoolType
--- retractBoolTerm (KBool boolTerm) = boolTerm
--- retractBoolTerm _ = error "Expecting element of type Bool."
-
--- retractIdTerm :: MiniK -> IdType
--- retractIdTerm (KInt (IntId idTerm)) = idTerm
--- retractIdTerm _ = error "Expecting element of type Id."
-
--- retractMapTerm :: MiniK -> MapType
--- retractMapTerm (KMap mapTerm) = mapTerm
--- retractMapTerm _ = error "Expecting element of type Map."
-
--- extractConcreteId :: MiniK -> Maybe Name
--- extractConcreteId (KInt (IntId (Id name))) = Just name
--- extractConcreteId _ = Nothing
-
 -- A type for identifiers inside languages defined in MiniK.
 -- For simplicity, languages may only have 'IntType' identifiers.
 newtype OfIdType (v :: Variability) = Id { retractConcreteId :: Name }
@@ -163,49 +225,117 @@ type IdType = OfIdType Concrete
 
 data OfIntType (v :: Variability)
     = I !IntValue
-    | Ref !(Of v OfIdType)
-    | Plus !(Of v OfIntType) !(Of v OfIntType)
-    | Mod !(Of v OfIntType) !(Of v OfIntType)
+    | Ref !(VariabOf v OfIdType)
+    | Plus !(VariabOf v OfIntType) !(VariabOf v OfIntType)
+    | Mod !(VariabOf v OfIntType) !(VariabOf v OfIntType)
 
-deriving stock instance (Show (Of v OfIntType), Show (Of v OfIdType)) => Show (OfIntType v)
-deriving stock instance (Eq (Of v OfIntType), Eq (Of v OfIdType)) => Eq (OfIntType v)
-deriving stock instance (Ord (Of v OfIntType), Ord (Of v OfIdType)) => Ord (OfIntType v)
-deriving stock instance (Generic (Of v OfIntType), Generic (Of v OfIdType)) => Generic (OfIntType v)
-deriving anyclass instance (Generic (Of v OfIntType), Generic (Of v OfIdType), NFData (Of v OfIntType), NFData (Of v OfIdType)) => NFData (OfIntType v)
+deriving stock instance
+    With Show
+        [ VariabOf v OfIdType
+        , VariabOf v OfIntType ]
+    => Show (OfIntType v)
+deriving stock instance
+    With Eq
+        [ VariabOf v OfIdType
+        , VariabOf v OfIntType ]
+    => Eq (OfIntType v)
+deriving stock instance
+    With Ord
+        [ VariabOf v OfIdType
+        , VariabOf v OfIntType ]
+    => Ord (OfIntType v)
+deriving stock instance
+    With Generic
+        [ VariabOf v OfIdType
+        , VariabOf v OfIntType ]
+    => Generic (OfIntType v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ VariabOf v OfIdType
+        , VariabOf v OfIntType ]
+    => NFData (OfIntType v)
 
-type IntType = Of Concrete OfIntType
-type IntTypeVar = Of Variable OfIntType
+type IntType = VariabOf Concrete OfIntType
+type IntTypeVar = VariabOf Variable OfIntType
 
 data OfBoolType (v :: Variability)
     = B !Bool
-    | Not !(Of v OfBoolType)
-    | And !(Of v OfBoolType) !(Of v OfBoolType)
-    | LT' !(Of v OfIntType) !(Of v OfIntType)
+    | Not !(VariabOf v OfBoolType)
+    | And !(VariabOf v OfBoolType) !(VariabOf v OfBoolType)
+    | LT' !(VariabOf v OfIntType) !(VariabOf v OfIntType)
 
-deriving stock instance (Show (Of v OfBoolType), Show (Of v OfIntType)) => Show (OfBoolType v)
-deriving stock instance (Eq (Of v OfBoolType), Eq (Of v OfIntType)) => Eq (OfBoolType v)
-deriving stock instance (Ord (Of v OfBoolType), Ord (Of v OfIntType)) => Ord (OfBoolType v)
-deriving stock instance (Generic (Of v OfBoolType), Generic (Of v OfIntType)) => Generic (OfBoolType v)
-deriving anyclass instance (Generic (Of v OfBoolType), Generic (Of v OfIntType), NFData (Of v OfBoolType), NFData (Of v OfIntType)) => NFData (OfBoolType v)
+deriving stock instance
+    With Show
+        [ VariabOf v OfBoolType
+        , VariabOf v OfIntType ]
+    => Show (OfBoolType v)
+deriving stock instance
+    With Eq
+        [ VariabOf v OfBoolType
+        , VariabOf v OfIntType ]
+    => Eq (OfBoolType v)
+deriving stock instance
+    With Ord
+        [ VariabOf v OfBoolType
+        , VariabOf v OfIntType ]
+    => Ord (OfBoolType v)
+deriving stock instance
+    With Generic
+        [ VariabOf v OfBoolType
+        , VariabOf v OfIntType ]
+    => Generic (OfBoolType v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ VariabOf v OfBoolType
+        , VariabOf v OfIntType ]
+    => NFData (OfBoolType v)
 
-type BoolType = Of Concrete OfBoolType
-type BoolTypeVar = Of Variable OfBoolType
+type BoolType = VariabOf Concrete OfBoolType
+type BoolTypeVar = VariabOf Variable OfBoolType
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
 -- For simplicity, these values are restricted to 'IntType'.
 data OfMapType (e :: Evaluated) (v :: Variability)
     = MapEmpty
-    | MapCons !(Normal e (Of v OfIdType)) !(Normal e (Of v OfIntType)) !(Of v (OfMapType e))
+    | MapCons
+        !(NormalOf e (VariabOf v OfIdType))
+        !(NormalOf e (VariabOf v OfIntType))
+        !(Variab (OfMapType e v))
 
-deriving stock instance (Show (Normal e (Of v OfIdType)), Show (Normal e (Of v OfIntType)), Show (Of v (OfMapType e))) => Show (OfMapType e v)
-deriving stock instance (Eq (Normal e (Of v OfIdType)), Eq (Normal e (Of v OfIntType)), Eq (Of v (OfMapType e))) => Eq (OfMapType e v)
-deriving stock instance (Ord (Normal e (Of v OfIdType)), Ord (Normal e (Of v OfIntType)), Ord (Of v (OfMapType e))) => Ord (OfMapType e v)
-deriving stock instance (Generic (Normal e (Of v OfIdType)), Generic (Normal e (Of v OfIntType)), Generic (Of v (OfMapType e))) => Generic (OfMapType e v)
-deriving anyclass instance (Generic (Normal e (Of v OfIdType)), Generic (Normal e (Of v OfIntType)), Generic (Of v (OfMapType e)), NFData (Normal e (Of v OfIdType)), NFData (Normal e (Of v OfIntType)), NFData (Of v (OfMapType e))) => NFData (OfMapType e v)
+deriving stock instance
+    With Show
+        [ NormalOf e (VariabOf v OfIdType)
+        , NormalOf e (VariabOf v OfIntType)
+        , Variab (OfMapType e v) ]
+    => Show (OfMapType e v)
+deriving stock instance
+    With Eq
+        [ NormalOf e (VariabOf v OfIdType)
+        , NormalOf e (VariabOf v OfIntType)
+        , Variab (OfMapType e v) ]
+    => Eq (OfMapType e v)
+deriving stock instance
+    With Ord
+        [ NormalOf e (VariabOf v OfIdType)
+        , NormalOf e (VariabOf v OfIntType)
+        , Variab (OfMapType e v) ]
+    => Ord (OfMapType e v)
+deriving stock instance
+    With Generic
+        [ NormalOf e (VariabOf v OfIdType)
+        , NormalOf e (VariabOf v OfIntType)
+        , Variab (OfMapType e v) ]
+    => Generic (OfMapType e v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ NormalOf e (VariabOf v OfIdType)
+        , NormalOf e (VariabOf v OfIntType)
+        , Variab (OfMapType e v) ]
+    => NFData (OfMapType e v)
 
-type MapType = Of Concrete (OfMapType Value)
-type MapTypeVar = Of Variable (OfMapType Redex)
+type MapType = Variab (OfMapType Value Concrete)
+type MapTypeVar = Variab (OfMapType Redex Variable)
 
 -- retractConcreteMap :: MapType -> [(Name, IntType)]
 -- retractConcreteMap (MapVar _) =
@@ -241,18 +371,39 @@ type MapTypeVar = Of Variable (OfMapType Redex)
 --
 data OfKonfiguration (e :: Evaluated) (v :: Variability) =
     Konfiguration
-        { k :: !(Of v OfMiniK)
-        , kState :: !(Of v (OfMapType e))
+        { k :: !(Variab (Normal (OfMiniK e v)))
+        , kState :: !(Variab (OfMapType Value v))
         }
 
-deriving stock instance (Show (Of v OfMiniK), Show (Of v (OfMapType e))) => Show (OfKonfiguration e v)
-deriving stock instance (Eq (Of v OfMiniK), Eq (Of v (OfMapType e))) => Eq (OfKonfiguration e v)
-deriving stock instance (Ord (Of v OfMiniK), Ord (Of v (OfMapType e))) => Ord (OfKonfiguration e v)
-deriving stock instance (Generic (Of v OfMiniK), Generic (Of v (OfMapType e))) => Generic (OfKonfiguration e v)
-deriving anyclass instance (Generic (Of v OfMiniK), Generic (Of v (OfMapType e)), NFData (Of v OfMiniK), NFData (Of v (OfMapType e))) => NFData (OfKonfiguration e v)
+deriving stock instance
+    With Show
+        [ Variab (Normal (OfMiniK e v))
+        , Variab (OfMapType Value v) ]
+    => Show (OfKonfiguration e v)
+deriving stock instance
+    With Eq
+        [ Variab (Normal (OfMiniK e v))
+        , Variab (OfMapType Value v) ]
+    => Eq (OfKonfiguration e v)
+deriving stock instance
+    With Ord
+        [ Variab (Normal (OfMiniK e v))
+        , Variab (OfMapType Value v) ]
+    => Ord (OfKonfiguration e v)
+deriving stock instance
+    With Generic
+        [ Variab (Normal (OfMiniK e v))
+        , Variab (OfMapType Value v) ]
+    => Generic (OfKonfiguration e v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ Variab (Normal (OfMiniK e v))
+        , Variab (OfMapType Value v) ]
+    => NFData (OfKonfiguration e v)
 
 type Konfiguration = OfKonfiguration Value Concrete
 type KonfigurationVar = OfKonfiguration Redex Variable
+type KonfigurationVarValue = OfKonfiguration Value Variable
 
 -- Can the program be rewritten further?
 canBeRewritten :: Konfiguration -> Bool
@@ -274,9 +425,21 @@ canBeRewritten Konfiguration { k } =
 --
 data RewriteRule =
     RewriteRule
-        { left :: !KonfigurationVar
+        { left :: !KonfigurationVarValue
         , right :: !KonfigurationVar
-        , sideCondition :: !BoolType
+        , sideCondition :: !BoolTypeVar -- TODO: bool must be normalized as a result?
         }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+-- auxiliary machinery
+
+type With :: forall typ. (typ -> Constraint) -> [typ] -> Constraint
+type family With constraint types where
+  With _ '[] = ()
+  With constraint (typ : rest) = (constraint typ, With constraint rest)
+
+type WithAll :: forall typ. [typ -> Constraint] -> [typ] -> Constraint
+type family WithAll constraints types where
+  WithAll typ '[] = ()
+  WithAll (constraint : rest) types = (With constraint types, WithAll rest types)

@@ -6,7 +6,7 @@ module Substitution
     , multiUnion
     , variablesToSubstitute
     , toList
-    , getIds
+    -- , getIds
     ) where
 
 import MiniK
@@ -20,9 +20,16 @@ import GHC.Generics (type Generic)
 
 -- A substitution is an association between variables and
 -- MiniK terms.
-newtype Substitution = Substitution (Map Name MiniK)
-  deriving stock (Show, Generic)
-  deriving anyclass NFData
+data Substitution = Substitution
+    { k :: Map Name MiniK
+    , kTerm :: Map Name KTerm
+    , kId :: Map Name IdType
+    , kInt :: Map Name IntType
+    , kBool :: Map Name BoolType
+    , kMap :: Map Name MapType
+    }
+    deriving stock (Show, Generic)
+    deriving anyclass NFData
 
 empty :: Substitution
 empty = Substitution Map.empty
@@ -49,7 +56,17 @@ toList :: Substitution -> [(Name, MiniK)]
 toList (Substitution subst) =
     Map.toList subst
 
-getIds :: Substitution -> Set Name
-getIds (Substitution subst) =
-    let values = mapMaybe extractConcreteId . Map.elems $ subst
-     in Set.fromList values
+-- getIds :: Substitution -> Set Name
+-- getIds (Substitution subst) =
+--     let
+--       k $ subst
+--       kTerm $ subst
+--       kId $ subst
+--       kInt $ subst
+--       kMap $ subst in
+--     let values = mapMaybe extractConcreteId . Map.elems $ subst
+--      in Set.fromList values
+--   where
+--     extractConcreteId :: MiniK -> Maybe Name
+--     extractConcreteId (KInt (IntId (Id name))) = Just name
+--     extractConcreteId _ = Nothing
