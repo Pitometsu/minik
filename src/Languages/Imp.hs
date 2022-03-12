@@ -12,25 +12,23 @@ assign =
     RewriteRule
         { left =
             Konfiguration
-                { k =
-                    KSeq
-                        (KSymbol
-                            "assign"
-                            [ KInt (IntId (IdVar "X"))
-                            , KInt (IntVar "I")
-                            ]
-                        )
-                        (KVar "Rest")
-                , kState = MapVar "M"
+                { k = K $
+                    (KSymbol
+                        "assign"
+                        [ K . KInt . Ref $ KVar @OfIdType "X"
+                        , K . KInt $ KVar @OfIntType "I"
+                        ]
+                        $ KVar @OfMiniK "Rest")
+                , kState = KVar @(OfMapType Redex) "M"
                 }
         , right =
             Konfiguration
-                { k = KVar "Rest"
-                , kState =
+                { k = KVar @OfMiniK "Rest"
+                , kState = K $
                     MapCons
-                        (IdVar "X")
-                        (IntVar "I")
-                        (MapVar "M")
+                        (KVar @OfIdType "X")
+                        (KVar @OfIntType "I")
+                        (KVar @OfMapType "M")
                 }
         , sideCondition = B True
         }
@@ -50,17 +48,15 @@ ifTrue =
     RewriteRule
         { left =
             Konfiguration
-                { k =
-                    KSeq
-                        (KSymbol
-                            "if"
-                            [ KBool (BoolVar "B")
-                            , KVar "TrueBranch"
-                            , KVar "FalseBranch"
-                            ]
-                        )
-                        (KVar "Rest")
-                , kState = MapVar "M"
+                { k = K $
+                    (KSymbol
+                        "if"
+                        [ K . KBool $ KVar "B"
+                        , KVar "TrueBranch"
+                        , KVar "FalseBranch"
+                        ]
+                    $ (KVar "Rest"))
+                , kState = KVar "M"
                 }
         , right =
             Konfiguration

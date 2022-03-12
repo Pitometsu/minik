@@ -80,3 +80,11 @@ default-extensions:
   - TypeApplications
   - DeriveGeneric
   - DeriveAnyClass
+  - StandaloneKindSignatures
+  - PolyKinds
+  - RankNTypes
+  - StandaloneDeriving
+  - UndecidableInstances
+  - TypeFamilies
+  - DefaultSignatures
+  - DataKinds

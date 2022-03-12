@@ -1,29 +1,62 @@
 module MiniK
-    ( MiniK (..)
-    , IdType (..)
-    , IntType (..)
-    , BoolType (..)
-    , MapType (..)
-    , Konfiguration (..)
-    , RewriteRule (..)
-    , Name
-    , retractIntTerm
-    , retractBoolTerm
-    , retractIdTerm
-    , retractMapTerm
-    , retractConcreteId
-    , retractConcreteMap
-    , extractConcreteId
-    , canBeRewritten
-    , normalizeK
-    , deNormalizeK
-    , reNormalizeK
-    ) where
+    -- ( MiniK (..)
+    -- , IdType (..)
+    -- , IntType (..)
+    -- , BoolType (..)
+    -- , MapType (..)
+    -- , Konfiguration (..)
+    -- , RewriteRule (..)
+    -- , Name
+    -- , retractIntTerm
+    -- , retractBoolTerm
+    -- , retractIdTerm
+    -- , retractMapTerm
+    -- , retractConcreteId
+    -- , retractConcreteMap
+    -- , extractConcreteId
+    -- , canBeRewritten
+    -- , normalizeK
+    -- , deNormalizeK
+    -- , reNormalizeK
+    -- ) where
+    where
 
 import Control.DeepSeq (type NFData)
+import Data.Kind (Type)
 import GHC.Generics (type Generic)
 
 type Name = String
+
+type IntValue = Int
+
+data Variability = Variable | Concrete
+     deriving stock (Show, Eq, Ord, Generic)
+     deriving anyclass NFData
+
+type family Of (v :: Variability) (t :: Variability -> Type) where
+  Of Concrete t = t Concrete
+  Of Variable t = Var t
+
+data Var (t :: Variability -> Type)
+    = KVar !Name
+    | K (t Variable)
+    | KAll (t Concrete)
+
+deriving stock instance (Show (a Variable), Show (a Concrete))  => Show (Var a)
+deriving stock instance (Eq (a Variable), Eq (a Concrete)) => Eq (Var a)
+deriving stock instance (Ord (a Variable), Ord (a Concrete)) => Ord (Var a)
+deriving stock instance (Generic (a Variable), Generic (a Concrete)) => Generic (Var a)
+deriving anyclass instance (Generic (a Variable), Generic (a Concrete), NFData (a Variable), NFData (a Concrete)) => NFData (Var a)
+
+data Evaluated = Redex | Value
+     deriving stock (Show, Eq, Ord, Generic)
+     deriving anyclass NFData
+
+type family Normal (v :: Evaluated) (t :: Type)
+type instance Normal _ (OfIdType t) = OfIdType t
+type instance Normal _ (Var t) = Var t
+type instance Normal Redex (OfIntType t) = OfIntType t
+type instance Normal Value (OfIntType Concrete) = IntValue
 
 -- The AST of the MiniK language for describing computations of
 -- user-defined programming languages.
@@ -33,26 +66,31 @@ type Name = String
 --   identified by the name of the symbol
 --   - KInt, KBool, KMap are the only types allowed in programs
 --   - KVar are variables which represent programs themselves
-data KSeqP m
+data OfMiniK (v :: Variability)
     = KEmpty
     -- | name, body, tail
-    | KSymbol !Name ![m (KTermP m)] (m (KSeqP m))
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
+    | KSymbol !Name ![Of v OfKTerm] (Of v OfMiniK)
 
-data KTermP m
-    = KExpr !(m (KExprP m))
-    | KSeq !(m (KSeqP m))
+deriving stock instance (Show (Of m OfMiniK), Show (Of m OfKTerm)) => Show (OfMiniK m)
+deriving stock instance (Eq (Of m OfMiniK), Eq (Of m OfKTerm)) => Eq (OfMiniK m)
+deriving stock instance (Ord (Of m OfMiniK), Ord (Of m OfKTerm)) => Ord (OfMiniK m)
+deriving stock instance (Generic (Of m OfMiniK), Generic (Of m OfKTerm)) => Generic (OfMiniK m)
+deriving anyclass instance (Generic (Of m OfMiniK), Generic (Of m OfKTerm), NFData (Of m OfMiniK), NFData (Of m OfKTerm)) => NFData (OfMiniK m)
 
-data KExprP m
-    = KInt !(m (IntType m))
-    | KBool !(m (BoolType m))
-    | KMap (m (MapType m))
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
+data OfKTerm (v :: Variability)
+    = KInt !(Of v OfIntType)
+    | KBool !(Of v OfBoolType)
+    | KMap (Of v (OfMapType Redex))
+    | KSeq !(Of v OfMiniK)
 
-type KMiniK = KSeqP Id
-type KMiniKVar = Var (KSeqP Var)
+deriving stock instance (Show (Of m OfIntType), Show (Of m OfBoolType), Show (Of m (OfMapType Redex)), Show (Of m OfMiniK)) => Show (OfKTerm m)
+deriving stock instance (Eq (Of m OfIntType), Eq (Of m OfBoolType), Eq (Of m (OfMapType Redex)), Eq (Of m OfMiniK)) => Eq (OfKTerm m)
+deriving stock instance (Ord (Of m OfIntType), Ord (Of m OfBoolType), Ord (Of m (OfMapType Redex)), Ord (Of m OfMiniK)) => Ord (OfKTerm m)
+deriving stock instance (Generic (Of m OfIntType), Generic (Of m OfBoolType), Generic (Of m (OfMapType Redex)), Generic (Of m OfMiniK)) => Generic (OfKTerm m)
+deriving anyclass instance (Generic (Of m OfIntType), Generic (Of m OfBoolType), Generic (Of m (OfMapType Redex)), Generic (Of m OfMiniK), NFData (Of m OfIntType), NFData (Of m OfBoolType), NFData (Of m (OfMapType Redex)), NFData (Of m OfMiniK)) => NFData (OfKTerm m)
+
+type KMiniK = Of Concrete OfMiniK
+type KMiniKVar = Of Variable OfMiniK
 
 -- data KType
 --     = KTypeId
@@ -74,96 +112,108 @@ type KMiniKVar = Var (KSeqP Var)
 --     deriving stock (Show, Eq, Ord, Generic)
 --     deriving anyclass NFData
 
-data Var a
-    = KVar !Name
-    | Concrete a
 
+-- normalizeK :: MiniK -> [MiniK], Generic
 
-normalizeK :: MiniK -> [MiniK]
-normalizeK term = normalizeK' term []
-  where
-  normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
-      $ normalizeK' term2 normalized
-  normalizeK' KEmpty normalized = normalized
-  normalizeK' term1 normalized = term1:normalized
+-- normalizeK :: MiniK -> [MiniK]
+-- normalizeK term = normalizeK' term []
+--   where
+--   normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
+--       $ normalizeK' term2 normalized
+--   normalizeK' KEmpty normalized = normalized
+--   normalizeK' term1 normalized = term1:normalized
 
-deNormalizeK :: [MiniK] -> MiniK
-deNormalizeK [] = KEmpty
-deNormalizeK [term, term2] = KSeq term term2
-deNormalizeK (term:terms) = KSeq term $ deNormalizeK terms
+-- deNormalizeK :: [MiniK] -> MiniK
+-- deNormalizeK [] = KEmpty
+-- deNormalizeK [term, term2] = KSeq term term2
+-- deNormalizeK (term:terms) = KSeq term $ deNormalizeK terms
 
-reNormalizeK :: MiniK -> MiniK
-reNormalizeK = deNormalizeK . normalizeK
+-- reNormalizeK :: MiniK -> MiniK
+-- reNormalizeK = deNormalizeK . normalizeK
 
 --
 
-retractIntTerm :: MiniK -> IntType
-retractIntTerm (KInt intTerm) = intTerm
-retractIntTerm _ = error "Expecting element of type Int."
+-- retractIntTerm :: MiniK -> IntType
+-- retractIntTerm (KInt intTerm) = intTerm
+-- retractIntTerm _ = error "Expecting element of type Int."
 
-retractBoolTerm :: MiniK -> BoolType
-retractBoolTerm (KBool boolTerm) = boolTerm
-retractBoolTerm _ = error "Expecting element of type Bool."
+-- retractBoolTerm :: MiniK -> BoolType
+-- retractBoolTerm (KBool boolTerm) = boolTerm
+-- retractBoolTerm _ = error "Expecting element of type Bool."
 
-retractIdTerm :: MiniK -> IdType
-retractIdTerm (KInt (IntId idTerm)) = idTerm
-retractIdTerm _ = error "Expecting element of type Id."
+-- retractIdTerm :: MiniK -> IdType
+-- retractIdTerm (KInt (IntId idTerm)) = idTerm
+-- retractIdTerm _ = error "Expecting element of type Id."
 
-retractMapTerm :: MiniK -> MapType
-retractMapTerm (KMap mapTerm) = mapTerm
-retractMapTerm _ = error "Expecting element of type Map."
+-- retractMapTerm :: MiniK -> MapType
+-- retractMapTerm (KMap mapTerm) = mapTerm
+-- retractMapTerm _ = error "Expecting element of type Map."
 
-extractConcreteId :: MiniK -> Maybe Name
-extractConcreteId (KInt (IntId (Id name))) = Just name
-extractConcreteId _ = Nothing
+-- extractConcreteId :: MiniK -> Maybe Name
+-- extractConcreteId (KInt (IntId (Id name))) = Just name
+-- extractConcreteId _ = Nothing
 
 -- A type for identifiers inside languages defined in MiniK.
 -- For simplicity, languages may only have 'IntType' identifiers.
-newtype IdType = Id { retractConcreteId :: !Name }
+newtype OfIdType (v :: Variability) = Id { retractConcreteId :: Name }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
 
-data IntTypeP m
-    = I !Int
-    | Ref !(m IdType)
-    | Plus !(m IntType) !(m IntType)
-    | Mod !(m IntType) !(m IntType)
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
+type IdType = OfIdType Concrete
 
-type IntType = IntTypeP Id
-type IntTypeVar = Var (IntTypeP Var)
+data OfIntType (v :: Variability)
+    = I !IntValue
+    | Ref !(Of v OfIdType)
+    | Plus !(Of v OfIntType) !(Of v OfIntType)
+    | Mod !(Of v OfIntType) !(Of v OfIntType)
 
-data BoolTypeP m
+deriving stock instance (Show (Of v OfIntType), Show (Of v OfIdType)) => Show (OfIntType v)
+deriving stock instance (Eq (Of v OfIntType), Eq (Of v OfIdType)) => Eq (OfIntType v)
+deriving stock instance (Ord (Of v OfIntType), Ord (Of v OfIdType)) => Ord (OfIntType v)
+deriving stock instance (Generic (Of v OfIntType), Generic (Of v OfIdType)) => Generic (OfIntType v)
+deriving anyclass instance (Generic (Of v OfIntType), Generic (Of v OfIdType), NFData (Of v OfIntType), NFData (Of v OfIdType)) => NFData (OfIntType v)
+
+type IntType = Of Concrete OfIntType
+type IntTypeVar = Of Variable OfIntType
+
+data OfBoolType (v :: Variability)
     = B !Bool
-    | Not !(m BoolType)
-    | And !(m BoolType) !(m BoolType)
-    | LT' !(m IntType) !(m IntType)
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
+    | Not !(Of v OfBoolType)
+    | And !(Of v OfBoolType) !(Of v OfBoolType)
+    | LT' !(Of v OfIntType) !(Of v OfIntType)
 
-type BoolType = BoolTypeP Id
-type BoolTypeVar = Var (BoolTypeP Var)
+deriving stock instance (Show (Of v OfBoolType), Show (Of v OfIntType)) => Show (OfBoolType v)
+deriving stock instance (Eq (Of v OfBoolType), Eq (Of v OfIntType)) => Eq (OfBoolType v)
+deriving stock instance (Ord (Of v OfBoolType), Ord (Of v OfIntType)) => Ord (OfBoolType v)
+deriving stock instance (Generic (Of v OfBoolType), Generic (Of v OfIntType)) => Generic (OfBoolType v)
+deriving anyclass instance (Generic (Of v OfBoolType), Generic (Of v OfIntType), NFData (Of v OfBoolType), NFData (Of v OfIntType)) => NFData (OfBoolType v)
+
+type BoolType = Of Concrete OfBoolType
+type BoolTypeVar = Of Variable OfBoolType
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
 -- For simplicity, these values are restricted to 'IntType'.
-data MapTypeP m
+data OfMapType (e :: Evaluated) (v :: Variability)
     = MapEmpty
-    | MapCons !(m IdType) !(m IntType) !(m MapType)
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
+    | MapCons !(Normal e (Of v OfIdType)) !(Normal e (Of v OfIntType)) !(Of v (OfMapType e))
 
-type MapType = MapTypeP Id
-type MapTypeVar = Var (MapType Var)
+deriving stock instance (Show (Normal e (Of v OfIdType)), Show (Normal e (Of v OfIntType)), Show (Of v (OfMapType e))) => Show (OfMapType e v)
+deriving stock instance (Eq (Normal e (Of v OfIdType)), Eq (Normal e (Of v OfIntType)), Eq (Of v (OfMapType e))) => Eq (OfMapType e v)
+deriving stock instance (Ord (Normal e (Of v OfIdType)), Ord (Normal e (Of v OfIntType)), Ord (Of v (OfMapType e))) => Ord (OfMapType e v)
+deriving stock instance (Generic (Normal e (Of v OfIdType)), Generic (Normal e (Of v OfIntType)), Generic (Of v (OfMapType e))) => Generic (OfMapType e v)
+deriving anyclass instance (Generic (Normal e (Of v OfIdType)), Generic (Normal e (Of v OfIntType)), Generic (Of v (OfMapType e)), NFData (Normal e (Of v OfIdType)), NFData (Normal e (Of v OfIntType)), NFData (Of v (OfMapType e))) => NFData (OfMapType e v)
 
-retractConcreteMap :: MapType -> [(Name, IntType)]
-retractConcreteMap (MapVar _) =
-    error "Expecting concrete element of type Map."
-retractConcreteMap MapEmpty = []
-retractConcreteMap (MapCons idTerm intTerm mapTerm) =
-    (retractConcreteId idTerm, intTerm)
-    : retractConcreteMap mapTerm
+type MapType = Of Concrete (OfMapType Value)
+type MapTypeVar = Of Variable (OfMapType Redex)
+
+-- retractConcreteMap :: MapType -> [(Name, IntType)]
+-- retractConcreteMap (MapVar _) =
+--     error "Expecting concrete element of type Map."
+-- retractConcreteMap MapEmpty = []
+-- retractConcreteMap (MapCons idTerm intTerm mapTerm) =
+--     (retractConcreteId idTerm, intTerm)
+--     : retractConcreteMap mapTerm
 
 -- The MiniK program configuration: the 'k' component represents
 -- the computation described in the MiniK language, and the
@@ -189,16 +239,20 @@ retractConcreteMap (MapCons idTerm intTerm mapTerm) =
 --   - X is an IdType variable
 --   - M is a MapType variable, here meaning the rest of the map
 --
-data KonfigurationP m =
+data OfKonfiguration (e :: Evaluated) (v :: Variability) =
     Konfiguration
-        { k :: !(m MiniK)
-        , kState :: !(m MapType)
+        { k :: !(Of v OfMiniK)
+        , kState :: !(Of v (OfMapType e))
         }
-    deriving stock (Show, Eq, Ord, Generic)
-    deriving anyclass NFData
 
-type Konfiguration = Konfiguration Id
-type KonfigurationVar = Konfiguration Var
+deriving stock instance (Show (Of v OfMiniK), Show (Of v (OfMapType e))) => Show (OfKonfiguration e v)
+deriving stock instance (Eq (Of v OfMiniK), Eq (Of v (OfMapType e))) => Eq (OfKonfiguration e v)
+deriving stock instance (Ord (Of v OfMiniK), Ord (Of v (OfMapType e))) => Ord (OfKonfiguration e v)
+deriving stock instance (Generic (Of v OfMiniK), Generic (Of v (OfMapType e))) => Generic (OfKonfiguration e v)
+deriving anyclass instance (Generic (Of v OfMiniK), Generic (Of v (OfMapType e)), NFData (Of v OfMiniK), NFData (Of v (OfMapType e))) => NFData (OfKonfiguration e v)
+
+type Konfiguration = OfKonfiguration Value Concrete
+type KonfigurationVar = OfKonfiguration Redex Variable
 
 -- Can the program be rewritten further?
 canBeRewritten :: Konfiguration -> Bool
@@ -220,7 +274,7 @@ canBeRewritten Konfiguration { k } =
 --
 data RewriteRule =
     RewriteRule
-        { left :: !Konfiguration
+        { left :: !KonfigurationVar
         , right :: !KonfigurationVar
         , sideCondition :: !BoolType
         }
