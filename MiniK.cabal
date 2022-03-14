@@ -57,6 +57,7 @@ library
       DataKinds
       TypeSynonymInstances
       TypeOperators
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
   build-depends:
       base >=4.7 && <5
@@ -95,6 +96,7 @@ executable MiniK-exe
       DataKinds
       TypeSynonymInstances
       TypeOperators
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
@@ -135,6 +137,7 @@ test-suite MiniK-test
       DataKinds
       TypeSynonymInstances
       TypeOperators
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK

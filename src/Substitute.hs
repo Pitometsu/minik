@@ -6,186 +6,100 @@ import Substitution (Substitution)
 import qualified Substitution
 import MiniK
 import qualified Control.Monad as Monad
+import Data.Kind (type Type)
 
 -- Procedure for applying a substitution to a rewrite rule.
 -- It checks that the given substitution contains all the
 -- variables inside the rewrite rule, before actually
 -- applying the substitution.
-substitute :: Substitution -> RewriteRule -> Maybe RewriteRule
-substitute subst rule = do
-    Monad.guard (coversAllRuleVars subst rule)
-    let listOfSubsts = Substitution.toList subst
-    return (foldl substituteVariable rule listOfSubsts)
+substitute :: Substitution -> RewriteVar -> Maybe Rewrite
+substitute = flip substituteVariable
 
-coversAllRuleVars :: Substitution -> RewriteRule -> Bool
-coversAllRuleVars subst rule =
-    all (`elem` variablesToSubstitute) (extractVariables rule)
-  where
-    variablesToSubstitute = Substitution.variablesToSubstitute subst
+fromVar :: Var term -> Substitution -> Maybe (term Concrete)
+fromVar (Var name) subst = Substitution.lookup name subst
+fromVar (K term) = substituteVariable term
 
-class ExtractVariables term where
-    extractVariables :: term -> [Name]
-
-instance ExtractVariables RewriteRule where
-    extractVariables RewriteRule { left, right, sideCondition } =
-        extractVariables left
-        <> extractVariables right
-        <> extractVariables sideCondition
-
-instance ExtractVariables Konfiguration where
-    extractVariables Konfiguration { k, kState } =
-        extractVariables k
-        <> extractVariables kState
-
-instance ExtractVariables MiniK where
-    extractVariables KEmpty = []
-    extractVariables (KInt intTerm) =
-        extractVariables intTerm
-    extractVariables (KBool boolTerm) =
-        extractVariables boolTerm
-    extractVariables (KMap mapTerm) =
-        extractVariables mapTerm
-    extractVariables (KVar name) =
-        [name]
-    extractVariables (KSymbol _ args) =
-        foldMap extractVariables args
-    extractVariables (KSeq kTerm1 kTerm2) =
-        extractVariables kTerm1
-        <> extractVariables kTerm2
-
-instance ExtractVariables IntType where
-    extractVariables (I _) = []
-    extractVariables (IntVar name) =
-        [name]
-    extractVariables (IntId idTerm) =
-        extractVariables idTerm
-    extractVariables (Plus intTerm1 intTerm2) =
-        extractVariables intTerm1
-        <> extractVariables intTerm2
-    extractVariables (Mod intTerm1 intTerm2) =
-        extractVariables intTerm1
-        <> extractVariables intTerm2
-
-instance ExtractVariables IdType where
-    extractVariables (Id _) = []
-    extractVariables (IdVar name) =
-        [name]
-
-instance ExtractVariables BoolType where
-    extractVariables (B _) = []
-    extractVariables (BoolVar name) =
-        [name]
-    extractVariables (Not boolTerm) =
-        extractVariables boolTerm
-    extractVariables (And boolTerm1 boolTerm2) =
-        extractVariables boolTerm1
-        <> extractVariables boolTerm2
-    extractVariables (LT' intTerm1 intTerm2) =
-        extractVariables intTerm1
-        <> extractVariables intTerm2
-
-instance ExtractVariables MapType where
-    extractVariables MapEmpty = []
-    extractVariables (MapVar name) =
-        [name]
-    extractVariables (MapCons idTerm intTerm mapTerm) =
-        extractVariables idTerm
-        <> extractVariables intTerm
-        <> extractVariables mapTerm
-
-class SubstituteVariable term where
-    substituteVariable :: term -> (Name, MiniK) -> term
-
-instance SubstituteVariable RewriteRule where
+class SubstituteVariable (term :: Variability -> Type) where
     substituteVariable
-        RewriteRule { left, right, sideCondition }
-        subst
-      =
-        RewriteRule
-            { left = substituteVariable left subst
-            , right = substituteVariable right subst
-            , sideCondition = substituteVariable sideCondition subst
-            }
+        :: term Variable
+        -> Substitution
+        -> Maybe (term Concrete)
 
-instance SubstituteVariable Konfiguration where
+instance SubstituteVariable OfRewrite where
+    substituteVariable
+        Rewrite { konf, condition }
+        subst
+      = Rewrite
+        <$> substituteVariable konf subst
+        <*> fromVar condition subst
+
+instance SubstituteVariable (OfKonfiguration e) where
     substituteVariable
         Konfiguration { k, kState }
         subst
-      =
-        Konfiguration
-            { k = substituteVariable k subst
-            , kState = substituteVariable kState subst
-            }
+      = Konfiguration
+        <$> fromVar k subst
+        <*> fromVar kState subst
 
-instance SubstituteVariable MiniK where
-    substituteVariable KEmpty _ = KEmpty
-    substituteVariable (KInt intTerm) subst =
-        KInt (substituteVariable intTerm subst)
-    substituteVariable (KBool boolTerm) subst =
-        KBool (substituteVariable boolTerm subst)
-    substituteVariable (KMap mapTerm) subst =
-        KMap (substituteVariable mapTerm subst)
-    substituteVariable (KVar name) (varName, kTerm)
-        | name == varName = kTerm
-        | otherwise = KVar name
-    substituteVariable (KSymbol symbolName args) subst =
-        KSymbol
-            symbolName
-            (flip substituteVariable subst <$> args)
+instance SubstituteVariable (Thunk e) where
+    substituteVariable (KVal kTerm) subst =
+        KVal <$> substituteVariable kTerm subst
     substituteVariable (KSeq kTerm1 kTerm2) subst =
         KSeq
-            (substituteVariable kTerm1 subst)
-            (substituteVariable kTerm2 subst)
+            <$> fromVar kTerm1 subst
+            <*> fromVar kTerm2 subst
+
+instance SubstituteVariable (OfMiniK e) where
+    substituteVariable KEmpty _ = pure KEmpty
+    substituteVariable (KSymbol symbolName args rest) subst =
+        KSymbol symbolName
+            <$> flip substituteVariable subst `traverse` args
+            <*> fromVar rest subst
+
+instance SubstituteVariable (OfKTerm e) where
+    substituteVariable (KInt intTerm) subst =
+        KInt <$> fromVar intTerm subst
+    substituteVariable (KBool boolTerm) subst =
+        KBool <$> fromVar boolTerm subst
+    substituteVariable (KMap mapTerm) subst =
+        KMap <$> fromVar mapTerm subst
+    substituteVariable (KExp kTerm) subst =
+        KExp <$> fromVar kTerm subst
 
 instance SubstituteVariable IntType where
-    substituteVariable (I val) _ = I val
-    substituteVariable (IntVar name) (varName, kTerm)
-        | name == varName =
-            retractIntTerm kTerm
-        | otherwise = IntVar name
-    substituteVariable (IntId idTerm) subst =
-        IntId (substituteVariable idTerm subst)
+    substituteVariable (I val) _ = pure $ I val
+    substituteVariable (Ref idTerm) subst =
+        Ref <$> fromVar idTerm subst
     substituteVariable (Plus intTerm1 intTerm2) subst =
-        Plus
-            (substituteVariable intTerm1 subst)
-            (substituteVariable intTerm2 subst)
+        Plus <$> fromVar intTerm1 subst
+            <*> fromVar intTerm2 subst
     substituteVariable (Mod intTerm1 intTerm2) subst =
-        Mod
-            (substituteVariable intTerm1 subst)
-            (substituteVariable intTerm2 subst)
+        Mod <$> fromVar intTerm1 subst
+            <*> fromVar intTerm2 subst
+
+instance SubstituteVariable OfIntValue where
+    substituteVariable (IVal val) _ = pure $ IVal val
 
 instance SubstituteVariable IdType where
-    substituteVariable (Id name) _ = Id name
-    substituteVariable (IdVar name) (varName, kTerm)
-        | name == varName =
-            retractIdTerm kTerm
-        | otherwise = IdVar name
+    substituteVariable (Id name) _ = pure $ Id name
 
 instance SubstituteVariable BoolType where
-    substituteVariable (B val) _ = B val
-    substituteVariable (BoolVar name) (varName, kTerm)
-        | name == varName =
-            retractBoolTerm kTerm
-        | otherwise = BoolVar name
+    substituteVariable (B val) _ = pure $ B val
     substituteVariable (Not boolTerm) subst =
-        Not (substituteVariable boolTerm subst)
+        Not <$> fromVar boolTerm subst
     substituteVariable (And boolTerm1 boolTerm2) subst =
-        And
-            (substituteVariable boolTerm1 subst)
-            (substituteVariable boolTerm2 subst)
+        And <$> fromVar boolTerm1 subst
+            <*> fromVar boolTerm2 subst
     substituteVariable (LT' intTerm1 intTerm2) subst =
-        LT'
-            (substituteVariable intTerm1 subst)
-            (substituteVariable intTerm2 subst)
+        LT' <$> fromVar intTerm1 subst
+            <*> fromVar intTerm2 subst
+
+instance SubstituteVariable OfBoolValue where
+    substituteVariable (BVal val) _ = pure $ BVal val
 
 instance SubstituteVariable MapType where
-    substituteVariable MapEmpty _ = MapEmpty
-    substituteVariable (MapVar name) (varName, kTerm)
-        | name == varName =
-            retractMapTerm kTerm
-        | otherwise = MapVar name
+    substituteVariable MapEmpty _ = pure $ MapEmpty
     substituteVariable (MapCons idTerm intTerm mapTerm) subst =
-        MapCons
-            (substituteVariable idTerm subst)
-            (substituteVariable intTerm subst)
-            (substituteVariable mapTerm subst)
+        MapCons <$> fromVar idTerm subst
+            <*> fromVar intTerm subst
+            <*> fromVar mapTerm subst

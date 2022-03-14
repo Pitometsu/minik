@@ -22,14 +22,26 @@ module MiniK
     where
 
 import Control.DeepSeq (type NFData)
-import Data.Kind (Constraint, Type)
+import Data.Kind (type Constraint, type Type)
+import Data.Ix (type Ix)
 import GHC.Generics (type Generic)
 
 type Name = String
 
-type IntValue = Int
+newtype OfIntValue (v :: Variability) = IVal { intValue :: Int }
+    deriving stock (Show, Eq, Ord, Bounded, Ix, Generic)
+    deriving newtype (Enum, Num, Real, Integral)
+    deriving anyclass NFData
 
-deriving stock instance Generic IntValue
+type IntValue = OfIntValue Concrete
+
+-- deriving stock instance Generic IntValue
+
+newtype OfBoolValue (v :: Variability) = BVal { boolValue :: Bool }
+    deriving stock (Show, Eq, Ord, Generic)
+    deriving anyclass NFData
+
+type BoolValue = OfBoolValue Concrete
 
 -- | Is certain term contain meta-variables
 data Variability = Variable | Concrete
@@ -66,8 +78,10 @@ type family NormalOf (e :: Evaluated) (t :: Type)
 
 type instance NormalOf _ (OfIdType v) = OfIdType v
 type instance NormalOf Redex (OfIntType v) = OfIntType v
-type instance NormalOf Value (OfIntType Concrete) = IntValue
-type instance NormalOf _ (Var t) = Var t
+type instance NormalOf Value (OfIntType v) = OfIntValue v
+type instance NormalOf Redex (OfBoolType v) = OfBoolType v
+type instance NormalOf Value (OfBoolType v) = OfBoolValue v
+-- type instance NormalOf _ (Var t) = Var t
 
 type family Normal (t :: Type)
 
@@ -194,8 +208,16 @@ type KTermVarValue = Variab (Normal (OfKTerm Value Variable))
 --     deriving stock (Show, Eq, Ord, Generic)
 --     deriving anyclass NFData
 
-
--- normalizeK :: MiniK -> [MiniK], Generic
+normalizeK
+    -- :: Thunk Concrete
+    :: Variab (Normal (OfMiniK Redex Concrete))
+    -> Variab (Normal (OfMiniK Value Concrete))
+normalizeK term = normalizeK' term  KEmpty
+  where
+    normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
+        $ normalizeK' term2 normalized
+    normalizeK' (KVal KEmpty) normalized = normalized
+    normalizeK' (KVal (KSymbol name body tail)) normalized = KSymbol name body $ normalizeK' tail normalized
 
 -- normalizeK :: MiniK -> [MiniK]
 -- normalizeK term = normalizeK' term []
@@ -292,6 +314,7 @@ deriving anyclass instance
 
 type BoolType = VariabOf Concrete OfBoolType
 type BoolTypeVar = VariabOf Variable OfBoolType
+type BoolTypeVarValue = Variab (NormalOf Value (OfBoolType Variable))
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
@@ -299,38 +322,38 @@ type BoolTypeVar = VariabOf Variable OfBoolType
 data OfMapType (e :: Evaluated) (v :: Variability)
     = MapEmpty
     | MapCons
-        !(NormalOf e (VariabOf v OfIdType))
-        !(NormalOf e (VariabOf v OfIntType))
+        !(Variab (NormalOf e (OfIdType v)))
+        !(Variab (NormalOf e (OfIntType v)))
         !(Variab (OfMapType e v))
 
 deriving stock instance
     With Show
-        [ NormalOf e (VariabOf v OfIdType)
-        , NormalOf e (VariabOf v OfIntType)
+        [ Variab (NormalOf e (OfIdType v))
+        , Variab (NormalOf e (OfIntType v))
         , Variab (OfMapType e v) ]
     => Show (OfMapType e v)
 deriving stock instance
     With Eq
-        [ NormalOf e (VariabOf v OfIdType)
-        , NormalOf e (VariabOf v OfIntType)
+        [ Variab (NormalOf e (OfIdType v))
+        , Variab (NormalOf e (OfIntType v))
         , Variab (OfMapType e v) ]
     => Eq (OfMapType e v)
 deriving stock instance
     With Ord
-        [ NormalOf e (VariabOf v OfIdType)
-        , NormalOf e (VariabOf v OfIntType)
+        [ Variab (NormalOf e (OfIdType v))
+        , Variab (NormalOf e (OfIntType v))
         , Variab (OfMapType e v) ]
     => Ord (OfMapType e v)
 deriving stock instance
     With Generic
-        [ NormalOf e (VariabOf v OfIdType)
-        , NormalOf e (VariabOf v OfIntType)
+        [ Variab (NormalOf e (OfIdType v))
+        , Variab (NormalOf e (OfIntType v))
         , Variab (OfMapType e v) ]
     => Generic (OfMapType e v)
 deriving anyclass instance
     WithAll [Generic, NFData]
-        [ NormalOf e (VariabOf v OfIdType)
-        , NormalOf e (VariabOf v OfIntType)
+        [ Variab (NormalOf e (OfIdType v))
+        , Variab (NormalOf e (OfIntType v))
         , Variab (OfMapType e v) ]
     => NFData (OfMapType e v)
 
@@ -427,19 +450,57 @@ data RewriteRule =
     RewriteRule
         { left :: !KonfigurationVarValue
         , right :: !KonfigurationVar
-        , sideCondition :: !BoolTypeVar -- TODO: bool must be normalized as a result?
+        , sideCondition :: !BoolTypeVar
         }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
+
+rewrite :: RewriteRule -> RewriteVar
+rewrite (RewriteRule _ r c) =
+    Rewrite (Konfiguration { k = normalizeK $ k r, kState = kState r }) c
+
+data OfRewrite (v :: Variability) = Rewrite
+    { konf :: !(OfKonfiguration Value v)
+    , condition :: !(VariabOf v OfBoolType)
+    }
+
+deriving stock instance
+    With Show
+        [ OfKonfiguration Value v
+        , VariabOf v OfBoolType ]
+    => Show (OfRewrite v)
+deriving stock instance
+    With Eq
+        [ OfKonfiguration Value v
+        , VariabOf v OfBoolType ]
+    => Eq (OfRewrite v)
+deriving stock instance
+    With Ord
+        [ OfKonfiguration Value v
+        , VariabOf v OfBoolType ]
+    => Ord (OfRewrite v)
+deriving stock instance
+    With Generic
+        [ OfKonfiguration Value v
+        , VariabOf v OfBoolType ]
+    => Generic (OfRewrite v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        [ OfKonfiguration Value v
+        , VariabOf v OfBoolType ]
+    => NFData (OfRewrite v)
+
+type Rewrite = OfRewrite Concrete
+type RewriteVar = OfRewrite Variable
 
 -- auxiliary machinery
 
 type With :: forall typ. (typ -> Constraint) -> [typ] -> Constraint
 type family With constraint types where
-  With _ '[] = ()
-  With constraint (typ : rest) = (constraint typ, With constraint rest)
+    With _ '[] = ()
+    With constraint (typ : rest) = (constraint typ, With constraint rest)
 
 type WithAll :: forall typ. [typ -> Constraint] -> [typ] -> Constraint
 type family WithAll constraints types where
-  WithAll typ '[] = ()
-  WithAll (constraint : rest) types = (With constraint types, WithAll rest types)
+    WithAll typ '[] = ()
+    WithAll (constraint : rest) types = (With constraint types, WithAll rest types)

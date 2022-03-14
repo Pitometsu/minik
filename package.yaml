@@ -90,3 +90,4 @@ default-extensions:
   - DataKinds
   - TypeSynonymInstances
   - TypeOperators
+  - GeneralizedNewtypeDeriving

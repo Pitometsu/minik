@@ -15,8 +15,6 @@ import Data.Maybe (fromMaybe)
 -- looking up any identifiers from the program state.
 checkCondition :: NormalizedMap -> BoolType -> Bool
 checkCondition _ (B val) = val
-checkCondition _ (BoolVar _) =
-    error "Variable should have been instantiated."
 checkCondition mapTerm (Not boolTerm) =
     -- traceEvent "Check condition \"Not\"" $
     not (checkCondition mapTerm boolTerm)
@@ -31,8 +29,6 @@ checkCondition mapTerm (LT' intTerm1 intTerm2) =
 
 evaluate :: NormalizedMap -> IntType -> Int
 evaluate _ (I val) = val
-evaluate _ (IntVar _) =
-    error "Variable should have been instantiated."
 evaluate mapTerm (IntId idType) =
     evaluate mapTerm (lookupId idType mapTerm)
 evaluate mapTerm (Plus intTerm1 intTerm2) =
@@ -42,10 +38,5 @@ evaluate mapTerm (Mod intTerm1 intTerm2) =
     evaluate mapTerm intTerm1
     `mod` evaluate mapTerm intTerm2
 
-lookupId :: IdType -> NormalizedMap -> IntType
-lookupId (IdVar _) _ =
-    error "Variable should have been instantiated."
-lookupId (Id name) nMap =
-    fromMaybe
-        (error "Tried to lookup undefined identifier.")
-        (NormalizedMap.lookupConcreteId name nMap)
+lookupId :: IdType -> NormalizedMap -> Maybe IntType
+lookupId (Id name) nMap = NormalizedMap.lookupConcreteId name nMap

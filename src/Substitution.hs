@@ -1,11 +1,12 @@
 module Substitution
     ( Substitution
+    , SubstitutionVariable (lookup)
     , empty
     , insert
     , union
     , multiUnion
-    , variablesToSubstitute
-    , toList
+    -- , variablesToSubstitute
+    -- , toList
     -- , getIds
     ) where
 
@@ -21,12 +22,11 @@ import GHC.Generics (type Generic)
 -- A substitution is an association between variables and
 -- MiniK terms.
 data Substitution = Substitution
-    { k :: Map Name MiniK
-    , kTerm :: Map Name KTerm
-    , kId :: Map Name IdType
-    , kInt :: Map Name IntType
-    , kBool :: Map Name BoolType
-    , kMap :: Map Name MapType
+    { varK :: Map Name MiniK
+    , varId :: Map Name IdType
+    , varInt :: Map Name IntType
+    , varBool :: Map Name BoolType
+    , varMap :: Map Name MapType
     }
     deriving stock (Show, Generic)
     deriving anyclass NFData
@@ -48,19 +48,32 @@ multiUnion :: [Substitution] -> Substitution
 multiUnion =
     foldl union empty
 
-variablesToSubstitute :: Substitution -> [Name]
-variablesToSubstitute (Substitution subst) =
-    Map.keys subst
+class SubstitutionVariable v where
+    lookup :: Name -> Substitution -> Maybe v
 
-toList :: Substitution -> [(Name, MiniK)]
-toList (Substitution subst) =
-    Map.toList subst
+instance SubstitutionVariable MiniK where
+    lookup name s = Map.lookup name $ varK s
+instance SubstitutionVariable IdType where
+    lookup name s = Map.lookup name $ varId s
+instance SubstitutionVariable IntType where
+    lookup name s = Map.lookup name $ varInt s
+instance SubstitutionVariable BoolType where
+    lookup name s = Map.lookup name $ varBool s
+instance SubstitutionVariable MapType where
+    lookup name s = Map.lookup name $ varMap s
+
+-- variablesToSubstitute :: Substitution -> [Name]
+-- variablesToSubstitute (Substitution subst) =
+--     Map.keys subst
+
+-- toList :: Substitution -> [(Name, MiniK)]
+-- toList (Substitution subst) =
+--     Map.toList subst
 
 -- getIds :: Substitution -> Set Name
 -- getIds (Substitution subst) =
 --     let
 --       k $ subst
---       kTerm $ subst
 --       kId $ subst
 --       kInt $ subst
 --       kMap $ subst in

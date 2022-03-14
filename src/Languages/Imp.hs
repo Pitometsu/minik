@@ -30,7 +30,7 @@ assign =
                         (KVar @OfIntType "I")
                         $ KVar @(OfMapType Value) "M"
                 }
-        , sideCondition = K $ B True
+        , sideCondition = K $ BVal True
         }
 
 {-
@@ -147,7 +147,7 @@ while =
                         . KVal $ KVar "Rest"
                 , kState = KVar "M"
                 }
-        , sideCondition = K $ B True
+        , sideCondition = K $ BVal True
         }
 
 rewriteRules :: [RewriteRule]

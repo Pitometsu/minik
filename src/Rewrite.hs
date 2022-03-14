@@ -27,21 +27,17 @@ applyRewriteRule
     -> Maybe Konfiguration
 applyRewriteRule konfig rule = do
     matchResult <- match konfig $ left rule
-    substitutedRule <- substitute matchResult rule
-    let requiredCondition = sideCondition substitutedRule
-        state =
-            NormalizedMap.normalize
-            . kState
-            . left
-            $ substitutedRule
+    substitutedRule <- substitute matchResult $ rewrite rule
+    let requiredCondition = condition substitutedRule
+        state = NormalizedMap.normalize $ kState konfig
     Monad.guard (checkCondition state requiredCondition)
     let konfigState = NormalizedMap.normalize $ kState konfig
         processedNewKonfig =
-            ((\konf -> konf {k = reNormalizeK $ k konf}) $ right substitutedRule)
+            (konf substitutedRule)
                 { kState = NormalizedMap.unNormalize
                       . NormalizedMap.map (I . evaluate konfigState)
                       . NormalizedMap.normalize
-                      . kState $ right substitutedRule
+                      . kState $ konf substitutedRule
                 }
     return processedNewKonfig
 
@@ -52,7 +48,7 @@ rewriteStep
     -> [RewriteRule]
     -> Konfiguration
 rewriteStep konfig = fromMaybe konfig
-    . rewriteStep' ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
+    . rewriteStep' konfig
 
 rewriteStep'
     :: Konfiguration
@@ -72,7 +68,7 @@ rewrite
     -> Konfiguration
 rewrite konfig rewriteRules =
     -- traceEvent "Rewrite" $
-    fromMaybe konfig $ loop ((\konf -> konf {k = reNormalizeK $ k konf}) konfig)
+    fromMaybe konfig $ loop konfig
   where
     loop input =
         maybe (pure input) loop $ rewriteStep' input rewriteRules

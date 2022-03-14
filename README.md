@@ -165,4 +165,8 @@ Looks like we can skip initial `coversAllRuleVars` check, because positive case 
 
 ???: can we speedup `extractVariables` (e.g. by passing result cache as an additional parameter)? And `substituteVariable` (use some kind of function that build the tree instead of passing values?). Make them parallel.
 
+So, now `extractVariables` unnecessary. And also we can pass Substitution directly to the `substituteVariable` to avoid MiniK AST re-building for an each variable. So, this way the computational complexity reduces from proportional to: AST nodes (both konfig and state) + AST nodes number times variables to substitute number -- to just AST number number (linear, multiplied by O(log variables to substitute number) complexity, according to Data.Map.Lazy.lookup documentation).
+
 TODO: try to speedup data by using unboxed values.
+
+??? How to normalizeK Seq (KVal KVar "a") (KVal KVar "b")? Looks like, only concrete MiniK could be normalized.

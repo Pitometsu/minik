@@ -26,8 +26,8 @@ import qualified Data.Map.Lazy as Map
 data NormalizedMap =
     NormalizedMap
         { opaque :: !(Maybe Name)
-        , symbolic :: !(Map Name IntType)
-        , concrete :: !(Map Name IntType)
+        , symbolic :: !(Map Name IntTypeVar)
+        , concrete :: !(Map Name IntTypeVar)
         }
 
 map :: (IntType -> IntType) -> NormalizedMap -> NormalizedMap
