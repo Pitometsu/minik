@@ -1,16 +1,17 @@
 module Rewrite
     ( rewrite
+    , rewriteNormalize
     , rewriteStep
     ) where
 
 import Control.Parallel.Strategies (parTraversable, rdeepseq, withStrategy)
-import MiniK (Konfiguration (..), RewriteRule (..), pattern I, reNormalizeK)
-import qualified Control.Monad as Monad
+import MiniK (Evaluated(..), Variability(..), OfKonfiguration (..), type KonfigurationConcr, type KonfigurationRedex, RewriteRule (..), OfRewrite (..), type RewriteVar, pattern I, type Konfiguration, normalizeK, rewriteOf, fromValueKonf, fromValueMap)
+import Control.Monad qualified as Monad
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import CheckCondition (checkCondition, evaluate)
 import Match (match)
 import Substitute (substitute)
-import qualified NormalizedMap
+import NormalizedMap qualified (normalize, renormalizeTraverse)
 -- import Debug.Trace
 
 -- The rewriting procedure.
@@ -22,53 +23,64 @@ import qualified NormalizedMap
 -- Map renormalization is necesssary, to ensure a correctly built map
 -- in the resulting configuration.
 applyRewriteRule
-    :: Konfiguration
+    :: KonfigurationConcr
     -> RewriteRule
     -> Maybe Konfiguration
 applyRewriteRule konfig rule = do
     matchResult <- match konfig $ left rule
-    substitutedRule <- substitute matchResult $ rewrite rule
-    let requiredCondition = condition substitutedRule
+    substituted <- substitute matchResult $ rewriteOf rule
+    let requiredCondition = condition substituted
         state = NormalizedMap.normalize $ kState konfig
     Monad.guard (checkCondition state requiredCondition)
-    let konfigState = NormalizedMap.normalize $ kState konfig
-        processedNewKonfig =
-            (konf substitutedRule)
-                { kState = NormalizedMap.unNormalize
-                      . NormalizedMap.map (I . evaluate konfigState)
-                      . NormalizedMap.normalize
-                      . kState $ konf substitutedRule
-                }
-    return processedNewKonfig
+    kState'
+        <- NormalizedMap.renormalizeTraverse @Redex @Value @Concrete
+            (CheckCondition.evaluate state)
+            . kState $ konf substituted
+    pure $ ((\konf' -> konf' { k = normalizeK $ k konf' }) $ konf substituted)
+        { kState = kState' }
 
 -- Step once through the execution of the program.
 -- Good for debugging.
 rewriteStep
-    :: Konfiguration
+    :: KonfigurationConcr
     -> [RewriteRule]
-    -> Konfiguration
-rewriteStep konfig = fromMaybe konfig
-    . rewriteStep' konfig
+    -> KonfigurationConcr
+rewriteStep konfig = fromMaybe konfig . fmap fromValueKonf .rewriteStep' konfig
 
 rewriteStep'
-    :: Konfiguration
+    :: KonfigurationConcr
     -> [RewriteRule]
     -> Maybe Konfiguration
 rewriteStep' konfig =
     -- traceEvent "Rewrite step" $
     listToMaybe . parMapMaybe (applyRewriteRule konfig)
   where
-    parMapMaybe f = withStrategy (parTraversable rdeepseq) . mapMaybe f
+    -- parMapMaybe f = withStrategy (parTraversable rdeepseq) . mapMaybe f
+    parMapMaybe f = mapMaybe f
 
 -- Fully execute the program by rewriting with the set of rewrite
 -- rules.
-rewrite
-    :: Konfiguration
+rewrite'
+    :: KonfigurationConcr
     -> [RewriteRule]
-    -> Konfiguration
-rewrite konfig rewriteRules =
+    -> Maybe Konfiguration
+rewrite' konfig rewriteRules =
     -- traceEvent "Rewrite" $
-    fromMaybe konfig $ loop konfig
+    loop =<< rewriteKonfig konfig
   where
-    loop input =
-        maybe (pure input) loop $ rewriteStep' input rewriteRules
+    rewriteKonfig = flip rewriteStep' rewriteRules
+    loop konfig' = maybe (pure konfig')
+        loop . rewriteKonfig $ fromValueKonf konfig'
+
+rewrite
+    :: KonfigurationConcr
+    -> [RewriteRule]
+    -> KonfigurationConcr
+rewrite konfig = fromMaybe konfig
+    . fmap fromValueKonf . rewrite' konfig
+
+rewriteNormalize
+    :: KonfigurationRedex
+    -> [RewriteRule]
+    -> KonfigurationConcr
+rewriteNormalize konfig = rewrite konfig { k = normalizeK $ k konfig }

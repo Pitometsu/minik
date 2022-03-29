@@ -3,18 +3,18 @@ module Match
     ) where
 
 import MiniK
-import Substitution (Substitution)
+import Substitution (type Substitution, type SubstitutionElement)
+import Control.Monad (guard)
 import Control.Monad.Logic (LogicT)
-import qualified Control.Monad.Logic as Logic
+import Control.Monad.Logic qualified as Logic
 import Control.Monad.Trans.Class (lift)
 import Control.Parallel.Strategies (parTraversable, rdeepseq, using)
-import qualified Substitution
+import Substitution qualified
 import Control.Applicative (Alternative (..))
-import qualified NormalizedMap
-import qualified Data.Map.Lazy as Map
-import Data.Map.Lazy (Map)
-import Data.Function ((&))
-import NormalizedMap (NormalizedMap (..))
+import NormalizedMap qualified
+import Data.Map.Lazy qualified as Map
+import Data.Kind (type Type)
+import NormalizedMap (OfNormalizedMap (..), OfMap (..), MapOf (..), NormalizedMapOf (..), NormalizedOf (..), OfNormalized (..), MapOfInt)
 -- import Debug.Trace
 
 -- Matching is the heart of the rewrite engine.
@@ -28,168 +28,168 @@ import NormalizedMap (NormalizedMap (..))
 --
 -- This implements mostly syntactical matching, with the exception of the
 -- map case, where we need to account for map associativity and commutativity.
-match :: Konfiguration -> Konfiguration -> Maybe Substitution
+match :: KonfigurationConcr -> KonfigurationVarValue -> Maybe Substitution
 match
     Konfiguration { k = kKonfig, kState = kStateKonfig }
     Konfiguration { k = kRule, kState = kStateRule }
   =
-    matchWithSubstitution kKonfig kRule Substitution.empty
-    >>= matchWithSubstitution kStateKonfig kStateRule
+    matchVar kKonfig kRule Substitution.empty
+    >>= matchVar kStateKonfig (mapVar @Variable fromValueMap kStateRule)
+    -- >>= matchVar (fromValueMap kStateKonfig) kStateRule
 
-class Match term where
-    matchWithSubstitution :: term -> term -> Substitution -> Maybe Substitution
+matchVar
+    :: forall (term :: Variability -> Type)
+    . (Match term, SubstitutionElement term)
+    => term Concrete
+    -> Var term
+    -> Substitution
+    -> Maybe Substitution
+matchVar konfigTerm (K ruleTerm) subst
+    = matchWithSubstitution konfigTerm ruleTerm subst
+matchVar konfigTerm (KVar name) subst
+    = pure $ Substitution.insert name konfigTerm subst
 
-instance Match MiniK where
-    matchWithSubstitution kTerm (KVar name) subst =
-        -- traceEvent "Match \"KVar\"" $
-        Just (Substitution.insert name kTerm subst)
+class Match (term :: Variability -> Type) where
+    matchWithSubstitution
+        :: term Concrete
+        -> term Variable
+        -> Substitution
+        -> Maybe Substitution
+
+-- instance Match Thunk where
+--     matchWithSubstitution
+--         (KSeq konfigTerm1 konfigTerm2)
+--         (KSeq ruleTerm1 ruleTerm2)
+--         subst
+--       = do
+--         subst1 <- matchVar konfigTerm1 ruleTerm1 subst
+--         subst2 <- matchVar konfigTerm2 ruleTerm2 subst
+--         pure $ Substitution.union subst1 subst2
+--     matchWithSubstitution (KVal konfigTerm) (KVal ruleTerm) subst
+--       = matchVar konfigTerm ruleTerm subst
+--     matchWithSubstitution _ _ _ = Nothing
+
+instance Match (OfMiniK Value) where
     matchWithSubstitution KEmpty KEmpty subst =
         -- traceEvent "Match \"KEmpty\"" $
-        Just subst
-    matchWithSubstitution (KInt intTermKonfig) (KInt intTermRule) subst =
-        -- traceEvent "Match \"KInt\"" $
-        matchWithSubstitution intTermKonfig intTermRule subst
-    matchWithSubstitution (KBool boolTermKonfig) (KBool boolTermRule) subst =
-        -- traceEvent "Match \"KBool\"" $
-        matchWithSubstitution boolTermKonfig boolTermRule subst
-    matchWithSubstitution (KMap mapTermKonfig) (KMap mapTermRule) subst =
-        -- traceEvent "Match \"KMap\"" $
-        matchWithSubstitution mapTermKonfig mapTermRule subst
-
+        pure subst
     matchWithSubstitution
-        (KSymbol konfigSymbolName konfigArgs)
-        (KSymbol ruleSymbolName ruleArgs)
+        (KSymbol konfigSymbolName konfigArgs konfigTerm)
+        (KSymbol ruleSymbolName ruleArgs ruleTerm)
         subst
         | konfigSymbolName == ruleSymbolName
         , length konfigArgs == length ruleArgs
       =
+        -- traceEvent "Match \"KSymbol\"" $
         Substitution.multiUnion
-        <$> traverse
+        <$> ((:) <$> matchVar konfigTerm ruleTerm subst <*> traverse
             (\(kArg, rArg) -> matchWithSubstitution kArg rArg subst)
-            (zip konfigArgs ruleArgs) `using` parTraversable rdeepseq
+            (zip konfigArgs ruleArgs)) -- `using` parTraversable rdeepseq
         | otherwise = Nothing
-
-    matchWithSubstitution
-        (KSeq konfigTerm1 konfigTerm2)
-        (KSeq ruleTerm1 ruleTerm2)
-        subst
-      = do
-        subst1 <- matchWithSubstitution konfigTerm1 ruleTerm1 subst
-        subst2 <- matchWithSubstitution konfigTerm2 ruleTerm2 subst
-        pure $ Substitution.union subst1 subst2
-
     matchWithSubstitution _ _ _ = Nothing
 
--- Note: 'Plus' matching is not yet associative or commutative.
-instance Match IntType where
-    matchWithSubstitution intTerm (IntVar name) subst =
-        Just (Substitution.insert name (KInt intTerm) subst)
-    matchWithSubstitution (I val1) (I val2) subst
-        | val1 == val2 = Just subst
-        | otherwise = Nothing
-    matchWithSubstitution (IntId konfigIdTerm) (IntId ruleIdTerm) subst =
-        matchWithSubstitution konfigIdTerm ruleIdTerm subst
+instance Match (OfKTerm Value) where
+    matchWithSubstitution (KInt intTermKonfig) (KInt intTermRule) subst =
+        -- traceEvent "Match \"KInt\"" $
+        matchVar intTermKonfig intTermRule subst
+    matchWithSubstitution (KBool boolTermKonfig) (KBool boolTermRule) subst =
+        -- traceEvent "Match \"KBool\"" $
+        matchVar boolTermKonfig boolTermRule subst
+    matchWithSubstitution (KMap mapTermKonfig) (KMap mapTermRule) subst =
+        -- traceEvent "Match \"KMap\"" $
+        matchVar mapTermKonfig mapTermRule subst
+    matchWithSubstitution (KExp termKonfig) (KExp termRule) subst =
+        -- traceEvent "Match \"KExp\"" $
+        matchVar termKonfig termRule subst
+    matchWithSubstitution _ _ _ = Nothing
 
+instance Match OfIdType where
+    matchWithSubstitution (Id name1) (Id name2) subst
+        = guard (name1 == name2) >> pure subst
+
+-- Note: 'Plus' matching is not yet associative or commutative.
+instance Match OfIntType where
+    matchWithSubstitution (I konfigVal) (I ruleVal) subst
+        = guard (konfigVal == ruleVal) >> pure subst
+    matchWithSubstitution (Ref konfigIdTerm) (Ref ruleIdTerm) subst =
+        matchVar konfigIdTerm ruleIdTerm subst
     matchWithSubstitution
         (Plus konfigIdTerm1 konfigIdTerm2)
         (Plus ruleIdTerm1 ruleIdTerm2)
         subst
       = do
-        subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
-        subst2 <- matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
+        subst1 <- matchVar konfigIdTerm1 ruleIdTerm1 subst
+        subst2 <- matchVar konfigIdTerm2 ruleIdTerm2 subst
         pure $ Substitution.union subst1 subst2
-
     matchWithSubstitution
         (Mod konfigIdTerm1 konfigIdTerm2)
         (Mod ruleIdTerm1 ruleIdTerm2)
         subst
       = do
-        subst1 <- matchWithSubstitution konfigIdTerm1 ruleIdTerm1 subst
-        subst2 <- matchWithSubstitution konfigIdTerm2 ruleIdTerm2 subst
+        subst1 <- matchVar konfigIdTerm1 ruleIdTerm1 subst
+        subst2 <- matchVar konfigIdTerm2 ruleIdTerm2 subst
         pure $ Substitution.union subst1 subst2
-
     matchWithSubstitution _ _ _ = Nothing
 
-instance Match IdType where
-    matchWithSubstitution idTerm (IdVar name) subst =
-        Just (Substitution.insert name (KInt (IntId idTerm)) subst)
-    matchWithSubstitution (Id name1) (Id name2) subst
-        | name1 == name2 = Just subst
-        | otherwise = Nothing
-    matchWithSubstitution _ _ _ = Nothing
-
-instance Match BoolType where
-    matchWithSubstitution boolTerm (BoolVar name) subst =
-        Just (Substitution.insert name (KBool boolTerm) subst)
-
+instance Match OfBoolType where
     matchWithSubstitution (B val1) (B val2) subst
-        | val1 == val2 = Just subst
-        | otherwise = Nothing
-
+        = guard (val1 == val2) >> pure subst
     matchWithSubstitution (Not boolTermKonfig) (Not boolTermRule) subst =
-        matchWithSubstitution boolTermKonfig boolTermRule subst
-
+        matchVar boolTermKonfig boolTermRule subst
     matchWithSubstitution
         (And boolTermKonfig1 boolTermKonfig2)
         (And boolTermRule1 boolTermRule2)
         subst
       = do
-        subst1 <- matchWithSubstitution boolTermKonfig1 boolTermRule1 subst
-        subst2 <- matchWithSubstitution boolTermKonfig2 boolTermRule2 subst
+        subst1 <- matchVar boolTermKonfig1 boolTermRule1 subst
+        subst2 <- matchVar boolTermKonfig2 boolTermRule2 subst
         pure $ Substitution.union subst1 subst2
-
     matchWithSubstitution
         (LT' intTermKonfig1 intTermKonfig2)
         (LT' intTermRule1 intTermRule2)
         subst
       = do
-        subst1 <- matchWithSubstitution intTermKonfig1 intTermRule1 subst
-        subst2 <- matchWithSubstitution intTermKonfig2 intTermRule2 subst
+        subst1 <- matchVar intTermKonfig1 intTermRule1 subst
+        subst2 <- matchVar intTermKonfig2 intTermRule2 subst
         pure $ Substitution.union subst1 subst2
-
     matchWithSubstitution _ _ _ = Nothing
 
-instance Match MapType where
-    matchWithSubstitution mapTerm (MapVar name) subst =
-        Just (Substitution.insert name (KMap mapTerm) subst)
-    matchWithSubstitution MapEmpty MapEmpty subst = Just subst
-
+instance Match (OfMapType Redex) where
+    matchWithSubstitution MapEmpty MapEmpty subst = pure subst
     matchWithSubstitution
         konfigMap@MapCons {}
         ruleMap@MapCons {}
         subst
       = do
-        let normalizedKonfigMap = NormalizedMap.normalize konfigMap
-            normalizedRuleMap = NormalizedMap.normalize ruleMap
+        let normalizedKonfigMap = NormalizedMapOf . NormalizedOf
+                $ NormalizedMap.normalize konfigMap
+            normalizedRuleMap = NormalizedMapOf . NormalizedOf
+                $ NormalizedMap.normalize ruleMap
         matchWithSubstitution normalizedKonfigMap normalizedRuleMap subst
-
     matchWithSubstitution _ _ _ = Nothing
 
-instance Match NormalizedMap where
+-- instance Match (OfMapType Value) where
+--   matchWithSubstitution konfigTerm ruleTerm = matchWithSubstitution
+--       (fromValueMap konfigTerm)
+--       (fromValueMap ruleTerm)
+
+instance Match (NormalizedMapOf Redex) where
     matchWithSubstitution
-        NormalizedMap
-            { opaque = opaqueKonfig
-            , symbolic = symbolicKonfig
-            , concrete = concreteKonfig
-            }
-        NormalizedMap
+        (NormalizedMapOf (NormalizedOf (OfMap concreteKonfig)))
+        (NormalizedMapOf (NormalizedOf (NormalizedMap OfNormalized
             { opaque = opaqueRule
             , symbolic = symbolicRule
             , concrete = concreteRule
-            }
+            })))
         subst
-        -- We expect the program configuration to be fully concrete.
-        | not (null opaqueKonfig && Map.null symbolicKonfig) =
-            -- traceEvent "Match \"NormalizedMap\", not concrete"
-            Nothing
-        | otherwise =
+        =
         -- traceEvent "Match \"NormalizedMap\"" $
         do
-            (leftToMatch1, matchedWithConcrete) <-
+            (leftToMatchSymbolic, matchedWithConcrete) <-
                 matchWithConcrete concreteKonfig concreteRule
-            (leftToMatch2, matchedWithSymbolic) <-
-                matchWithSymbolic leftToMatch1 symbolicRule
-            matchedWithOpaque <- matchWithOpaque leftToMatch2 opaqueRule
+            (leftToMatchOpaque, matchedWithSymbolic) <-
+                matchWithSymbolic leftToMatchSymbolic symbolicRule
+            matchedWithOpaque <- matchWithOpaque leftToMatchOpaque opaqueRule
             return
                 $ Substitution.multiUnion
                     [ matchedWithConcrete
@@ -197,74 +197,66 @@ instance Match NormalizedMap where
                     , matchedWithOpaque
                     , subst
                     ]
-      where
+      where -- TODO: encapsulate NormalizedMap logic into the module
         matchWithConcrete
-            :: Map Name IntType
-            -> Map Name IntType
-            -> Maybe (Map Name IntType, Substitution)
-        matchWithConcrete mapKonfig mapRule =
+            :: MapOfInt Concrete Redex
+            -> MapOfInt Variable Redex
+            -> Maybe (MapOfInt Concrete Redex, Substitution)
+        matchWithConcrete (MapOf konfigMap) (MapOf ruleMap) =
           -- traceEvent "Match \"NormalizedMap\" with concrete ids" $
           do
-            let intersectionKonfigValues =
-                    Map.intersection mapKonfig mapRule
-                    & Map.elems
-                intersectionRuleValues =
-                    Map.intersection mapRule mapKonfig
-                    & Map.elems
-                difference = Map.difference mapKonfig mapRule
+            let -- konfigMap' = I <$> konfigMap
+                    -- ???: more elegant way to split values out
+                intersectionKonfigValues = Map.elems
+                    $ Map.intersection konfigMap ruleMap
+                intersectionRuleValues = Map.elems
+                    $ Map.intersection ruleMap konfigMap
+                difference = Map.difference konfigMap ruleMap
             matchedValues <-
                 traverse
                     (uncurry matchElements)
                     (zip intersectionKonfigValues intersectionRuleValues)
-                `using` parTraversable rdeepseq
-            return (difference, Substitution.multiUnion matchedValues)
+                -- `using` parTraversable rdeepseq
+            return (MapOf difference, Substitution.multiUnion matchedValues)
 
         matchWithSymbolic
-            :: Map Name IntType
-            -> Map Name IntType
-            -> Maybe (Map Name IntType, Substitution)
-        matchWithSymbolic mapKonfig mapRule =
+            :: MapOfInt Concrete Redex
+            -> MapOfInt Variable Redex
+            -> Maybe (MapOfInt Concrete Redex, Substitution)
+        matchWithSymbolic (MapOf konfigMap) (MapOf ruleMap) =
           -- traceEvent "Match \"NormalizedMap\" with symbolic vars" $
           do
-            matchResult <-
-                generateMatch (Map.toList mapKonfig) (Map.toList mapRule)
-                & Logic.observeT
+            matchResult <- Logic.observeT
+                $ generateMatch (Map.toList konfigMap) (Map.toList ruleMap)
             let difference =
-                    Map.withoutKeys mapKonfig (Substitution.getIds matchResult) -- ???: getIds for what
-            return (difference, matchResult)
+                    Map.withoutKeys konfigMap (Substitution.getIds matchResult)
+            return (MapOf difference, matchResult)
 
         matchWithOpaque
-            :: Map Name IntType
+            :: MapOfInt Concrete Redex
             -> Maybe Name
             -> Maybe Substitution
         matchWithOpaque _ Nothing = Nothing
         matchWithOpaque konfigMap (Just varName) =
           -- traceEvent "Match \"NormalizedMap\" with an opaque map" $
-            let unNormalizedMap =
-                    KMap
-                    . NormalizedMap.unNormalize
-                    . NormalizedMap.fromConcrete
-                    $ konfigMap
-             in Substitution.insert varName unNormalizedMap subst
-                & Just
+            let unNormalizedMap = NormalizedMap.unNormalize @Concrete $ OfMap konfigMap in
+                Just $ Substitution.insert varName unNormalizedMap subst
 
         generateMatch
             :: [(Name, IntType)]
-            -> [(Name, IntType)]
+            -> [(Name, IntTypeVar)]
             -> LogicT Maybe Substitution
         generateMatch mapKonfig mapRule = do
             (idName, intTermKonfig) <- scatter mapKonfig
             (varName, intTermRule) <- scatter mapRule
-            keySubst <-
-                matchWithSubstitution (IntId (Id idName)) (IntVar varName) subst
-                & lift
-            valueSubst <-
-                matchWithSubstitution intTermKonfig intTermRule subst
-                & lift
+            keySubst <- lift
+                $ matchVar @OfIdType (Id idName) (KVar varName) subst
+            valueSubst <- lift
+                $ matchVar @OfIntType intTermKonfig intTermRule subst
             pure $ Substitution.union keySubst valueSubst
 
         matchElements elem1 elem2 =
-            matchWithSubstitution elem1 elem2 subst
+            matchVar elem1 elem2 subst
 
 scatter :: (Foldable f, Alternative m) => f a -> m a
 scatter = foldr ((<|>) . pure) empty

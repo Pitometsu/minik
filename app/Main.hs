@@ -2,7 +2,7 @@ module Main where
 
 import Rewrite
 import MiniK
-import qualified Languages.Imp as Imp
+import Languages.Imp qualified as Imp
 
 -- TODO: Add a program which contains some complexity.
 -- For example, it can have some nested while loops,
@@ -10,9 +10,9 @@ import qualified Languages.Imp as Imp
 --
 -- This program will allow you to profile the execution
 -- engine and measure performance.
-inputProgram :: Konfiguration
+inputProgram :: KonfigurationConcr
 inputProgram =
-    Konfiguration 
+    Konfiguration
         { k = KEmpty
         , kState = MapEmpty
         }

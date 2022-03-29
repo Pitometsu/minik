@@ -31,9 +31,11 @@ dependencies:
 
 ghc-options:
   - -Wall
+  - -Wno-unticked-promoted-constructors
   - -fwarn-tabs
   - -fwarn-incomplete-uni-patterns
   - -fwarn-incomplete-record-updates
+  # - -freduction-depth=0
 
 library:
   source-dirs: src
@@ -91,3 +93,18 @@ default-extensions:
   - TypeSynonymInstances
   - TypeOperators
   - GeneralizedNewtypeDeriving
+  - ScopedTypeVariables
+  - FlexibleInstances
+  - MultiParamTypeClasses
+  - FunctionalDependencies
+  - TypeFamilyDependencies
+  - AllowAmbiguousTypes
+  - FlexibleContexts
+  - InstanceSigs
+  # - QuantifiedConstraints
+  # - IncoherentInstances
+  - ConstraintKinds
+  - GADTs
+  - DerivingVia
+  - ImportQualifiedPost
+  - ApplicativeDo

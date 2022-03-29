@@ -114,7 +114,7 @@ So, plan is to:
 - [X] Understand the code flow
 - [X] Fix tests
 - [ ] Write more tests (Add TestImp language for that)
-- [ ] Rewrite datatypes as GADT to impove code maintainability
+- [X] Rewrite datatypes as GADT to impove code maintainability (partially done)
 - [ ] Rewrite functions type signatures in a final tagless way to improve code modularity
 - [X] Estimate data processing algorithmic complexity, improve it where possible
 - [X] Write load test, profile code to find the bottlenecks, fix them if possible.
@@ -170,3 +170,40 @@ So, now `extractVariables` unnecessary. And also we can pass Substitution direct
 TODO: try to speedup data by using unboxed values.
 
 ??? How to normalizeK Seq (KVal KVar "a") (KVal KVar "b")? Looks like, only concrete MiniK could be normalized.
+
+Well, maybe dedicated non-normalized form of MiniK with a KSeq is not a good idea, and it worth
+to split KSymbol type from the MiniK.
+No. Seq (KVal @OfMiniK KVar "a") (KVal @OfMiniK KVar "b"), the first argument type is MiniK, not a KSymbol. So, non-normalized form is necessary yet.
+
+???: what would be faster: `matchWithSubstitution` with a single the `Substitution` cache, or a parallel one implementation? Or use cache wrapped in MVar?
+
+TODO: write traverse-like functions for MiniK (and so map-like and fold-like helpers) to reduce instances boilerplate. E.g. we can pass traversal function `:: constraint node => contraint node -> result` to traverse via common `constraint`.
+
+Now `Thunk Variable` isomorphic to the original `MiniK` type. Other types created to represent data states on all the steps of data flow according to principle of incorrect data representation possibility elimination. And according to DRY, if possible. Which must improve both correctness and maintainability.
+
+???: `normalizeK` and `deNormalizeK` performance improvement.
+!!!: matching instances could be simplified and made more type safe, if use GADT with AST structure stored into index type arguments.
+
+!!!: Also, the normalized property of Map can be encoded in index type (and change by appropriate functions, obviously**.
+
+TODO: use Either instead of Maybe to pass descriptive errors.
+
+???: because of how now KSymbol looks like, maybe it worth to write MiniK programs in continuation-passing stily via do-notation, in kinda imperative way.
+
+***
+
+What undone, but it worth to do yet:
+
+- Naming: types, type arguments, functions -- name in readable way
+- Documentation
+- Simplify the code, add type synonyms, patterns to make code shorter, split functions to make them shorter, move functions to nested scope to make module scope cleaner
+- Use some effects to explicitly split signature and implementation of the MiniK evaluation: final tagless or free monad, transformers or ReaderT, mtl or capabilities
+- Use GADT to make KSymbol and KTerm evem more type safer
+- Use profiling information to analize performance better
+- Use MVar to handle evaluation cache and parallel computation when necessary
+- Use unboxed values to speedup computations
+- Make more clean module separation.
+
+Profiling results after datatypes refactoring (made safer):
+
+- without parallel computation ~20sec

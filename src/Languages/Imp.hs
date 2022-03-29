@@ -27,10 +27,10 @@ assign =
                 , kState = K $
                     MapCons
                         (KVar @OfIdType "X")
-                        (KVar @OfIntType "I")
+                        (KVar @OfIntValue "I")
                         $ KVar @(OfMapType Value) "M"
                 }
-        , sideCondition = K $ BVal True
+        , sideCondition = K $ B True
         }
 
 {-
@@ -61,7 +61,8 @@ ifTrue =
                 }
         , right =
             Konfiguration
-                { k = KSeq (KVar @(OfMiniK Redex) "TrueBranch")
+                { k = KSeq
+                      (KVar @(OfMiniK Redex) "TrueBranch")
                       $ KVar @(OfMiniK Redex) "Rest"
                 , kState = KVar @(OfMapType Value) "M"
                 }
@@ -97,7 +98,8 @@ ifFalse =
                 }
         , right =
             Konfiguration
-                { k = KSeq (KVar "FalseBranch")
+                { k = KSeq
+                      (KVar "FalseBranch")
                       $ KVar "Rest"
                 , kState = KVar "M"
                 }
@@ -147,7 +149,7 @@ while =
                         . KVal $ KVar "Rest"
                 , kState = KVar "M"
                 }
-        , sideCondition = K $ BVal True
+        , sideCondition = K $ B True
         }
 
 rewriteRules :: [RewriteRule]

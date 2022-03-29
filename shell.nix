@@ -11,4 +11,4 @@ with import ./nix/env.nix; with nixpkgs; mkShell {
   ] ++ (with haskellPackages; [
     cabal-install stack ghci ghcid
     ghcide hasktags haskell-language-server
-    fourmolu hoogle hlint threadscope hp2pretty ]); }
+    fourmolu hoogle hlint threadscope hp2pretty pointfree ]); }

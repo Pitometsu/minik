@@ -2,8 +2,8 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import MiniK
 import Rewrite
-import qualified NormalizedMap
-import qualified Languages.Imp as Imp
+import NormalizedMap qualified
+import Languages.Imp qualified as Imp
 import Debug.Trace
 
 main :: IO ()
@@ -63,7 +63,7 @@ singleAssign =
     testCase "Single assignment" $ do
         let konfig =
                 Konfiguration
-                    { k = KSeq assignA1 KEmpty
+                    { k = assignA1 KEmpty
                     , kState = MapEmpty
                     }
             expectedResult =
@@ -86,7 +86,7 @@ multipleAssign =
     testCase "Multiple assignments" $ do
         let konfig =
                 Konfiguration
-                    { k = KSeq assignA1 (KSeq assignB2 (KSeq assignC3 KEmpty))
+                    { k = assignA1 . assignB2 $ assignC3  KEmpty
                     , kState = MapEmpty
                     }
             expectedResult =
@@ -117,19 +117,16 @@ multipleAssign =
 ifTrueTest :: TestTree
 ifTrueTest =
     testCase "Simple if true" $ do
-        let trueBranch = assignA1
-            falseBranch = assignB2
+        let trueBranch = KExp $ assignA1 KEmpty
+            falseBranch = KExp $ assignB2 KEmpty
             konfig =
                 Konfiguration
                     { k =
-                        KSeq
-                            (KSymbol
-                                "if"
-                                [ simpleIfCondition
-                                , trueBranch
-                                , falseBranch
-                                ]
-                            )
+                        KSymbol "if"
+                            [ simpleIfCondition
+                            , trueBranch
+                            , falseBranch
+                            ]
                             KEmpty
                     , kState = MapEmpty
                     }
@@ -150,19 +147,16 @@ ifTrueTest =
 ifFalseTest :: TestTree
 ifFalseTest =
     testCase "Simple if false" $ do
-        let trueBranch = assignA1
-            falseBranch = assignB2
+        let trueBranch = KExp $ assignA1 KEmpty
+            falseBranch = KExp $ assignB2 KEmpty
             konfig =
                 Konfiguration
                     { k =
-                        KSeq
-                            (KSymbol
-                                "if"
-                                [ simpleNegatedIfCondition
-                                , trueBranch
-                                , falseBranch
-                                ]
-                            )
+                        KSymbol "if"
+                            [ simpleNegatedIfCondition
+                            , trueBranch
+                            , falseBranch
+                            ]
                             KEmpty
                     , kState = MapEmpty
                     }
@@ -183,19 +177,16 @@ ifFalseTest =
 ifLookupTest :: TestTree
 ifLookupTest =
     testCase "If condition does lookup" $ do
-        let trueBranch = assignA1
-            falseBranch = assignB2
+        let trueBranch = KExp $ assignA1 KEmpty
+            falseBranch = KExp $ assignB2 KEmpty
             konfig =
                 Konfiguration
                     { k =
-                        KSeq
-                            (KSymbol
-                                "if"
-                                [ withLookupIfCondition
-                                , trueBranch
-                                , falseBranch
-                                ]
-                            )
+                        KSymbol "if"
+                            [ withLookupIfCondition
+                            , trueBranch
+                            , falseBranch
+                            ]
                             KEmpty
                     , kState =
                         MapCons (Id "a") (I 0) MapEmpty
@@ -220,17 +211,12 @@ incrementTo10 =
         let konfig =
                 Konfiguration
                     { k =
-                        KSeq
-                            assignA1
-                            ( KSeq
-                                (KSymbol
-                                    "while"
-                                    [ aLessThan 10
-                                    , incrementA
-                                    ]
-                                )
+                        assignA1
+                            $ KSymbol "while"
+                                [ aLessThan 10
+                                , KExp $ incrementA KEmpty
+                                ]
                                 KEmpty
-                            )
                     , kState = MapEmpty
                     }
             expectedResult =
@@ -258,46 +244,35 @@ checkIsPrime =
         let actualResult1 = rewrite (program 7) Imp.rewriteRules
             actualResult2 = rewrite (program 10) Imp.rewriteRules
 
-        assertBool "Program is not stuck" (not (canBeRewritten actualResult1))
+        assertBool "Program is not stuck" (not (canBeRewritten  actualResult1))
         assertBool "Program is not stuck" (not (canBeRewritten actualResult2))
         assertBool "Correct value of isPrime" (not (flagIndicatesIsPrime actualResult1))
         assertBool "Correct value of isPrime" (flagIndicatesIsPrime actualResult2)
   where
+    program :: IntValue -> KonfigurationConcr
     program inputNumber =
         Konfiguration
-            { k =
-                KSeq
-                    initIsPrime
-                    (KSeq
-                        initCounter
-                        (KSeq
-                            (KSymbol
-                                "while"
-                                [ whileCondition inputNumber
-                                , KSeq
-                                    (KSymbol
-                                        "if"
-                                        [ ifCondition inputNumber
-                                        , assignIsPrimeTrue
-                                        , KEmpty
-                                        ]
-                                    )
-                                    (KSeq
-                                        incrementCounter
-                                        KEmpty
-                                    )
-                                ]
-                            )
-                            KEmpty
-                        )
-                    )
+            { k = -- ???: Cont do
+                initIsPrime
+                . initCounter
+                $ KSymbol "while"
+                    [ whileCondition inputNumber
+                    , KExp
+                        $ KSymbol "if"
+                            [ ifCondition inputNumber
+                            , KExp $ assignIsPrimeTrue KEmpty
+                            , KExp KEmpty
+                            ]
+                            $ incrementCounter KEmpty
+                    ]
+                    KEmpty
             , kState = MapEmpty
             }
+    flagIndicatesIsPrime :: KonfigurationConcr -> Bool
     flagIndicatesIsPrime Konfiguration { kState } =
         let flag =
-                NormalizedMap.lookupConcreteId "isPrime"
-                . NormalizedMap.normalize
-                $ kState
+                NormalizedMap.lookupConcreteId @Concrete "isPrime"
+                . NormalizedMap.normalize $ kState
          in
             case flag of
                 Just value ->
@@ -316,9 +291,7 @@ mapCommutativity =
         let konfig =
                 Konfiguration
                     { k =
-                        KSeq
-                            assignC3
-                            KEmpty
+                        assignC3 KEmpty
                     , kState = MapCons (Id "d") (I 4)
                         . MapCons (Id "a") (I 1)
                         $ MapCons (Id "b") (I 2) MapEmpty
@@ -352,151 +325,120 @@ loadTest =
     testCase "Long nested while loop" $ do
         let konfig =
                 Konfiguration
-                    { k =
-                        KSeq
-                            (whileBody depth)
-                            KEmpty
+                    { k = whileBody depth
                     , kState = MapEmpty
                     }
             depth = 62
             actualResult =
                 traceEvent "Test: long nested while loop - begin" $
                 rewrite konfig Imp.rewriteRules
-            counterVal = NormalizedMap.lookupConcreteId (counterId depth)
+            counterVal = NormalizedMap.lookupConcreteId @Concrete
+                (counterId depth)
                 . NormalizedMap.normalize $ kState actualResult
             expectedResult = Just $ I 4611686018427387904
         assertEqual "" expectedResult counterVal
         traceEvent "Test: long nested while loop - end" $ pure ()
   where
-    counterId :: Int -> String
+    counterId :: IntValue -> String
     counterId = ("a" <>) . show
-    whileBody :: Int -> MiniK
+    whileBody :: IntValue -> MiniK
     whileBody depth = whileBody' 1
       where
-      whileBody' n = let counter = IntId . Id $ counterId n in
-          (KSeq
-              (KSymbol
-                  "assign"
-                  [ KInt counter
-                  , KInt $ I 0
-                  ])
-              (KSymbol
-                  "while"
-                  [ KBool $ LT' counter (I $ n * 2)
-                  , KSeq
-                      (KSymbol
-                          "assign"
-                          [ KInt counter
-                          , KInt (Plus counter (I 1))
-                          ])
-                      (KSeq
-                          (KSymbol
-                              "assign"
-                              [ KInt counter
-                              , KInt $ foldl Plus counter
-                                  $ IntId . Id . counterId
-                                  <$> take n [1..]
-                              ])
-                          if n < depth then whileBody' $ n + 1 else KEmpty)
-                  ]))
+      whileBody' n = let counter = Ref . Id $ counterId n in
+          KSymbol "assign"
+              [ KInt counter
+              , KInt $ I 0
+              ]
+          $ KSymbol "while"
+              [ KBool $ LT' counter (I $ n * 2)
+              , KExp $
+                  KSymbol
+                      "assign"
+                      [ KInt counter
+                      , KInt (Plus counter (I 1))
+                      ]
+                  $ KSymbol "assign"
+                      [ KInt counter
+                      , KInt $ foldl Plus counter
+                          $ Ref . Id . counterId
+                          <$> take (intValue n) [1..]
+                      ]
+                      if n < depth then whileBody' $ n + 1 else KEmpty
+              ] KEmpty
 
-assignA1, assignB2, assignC3 :: MiniK
+assignA1, assignB2, assignC3 :: MiniK -> MiniK
 assignA1 =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "a"))
-        , KInt (I 1)
+    KSymbol "assign"
+        [ KInt . Ref $ Id "a"
+        , KInt $ I 1
         ]
 assignB2 =
-       KSymbol
-           "assign"
-           [ KInt (IntId (Id "b"))
-           , KInt (I 2)
+       KSymbol "assign"
+           [ KInt . Ref $ Id "b"
+           , KInt $ I 2
            ]
 assignC3 =
-       KSymbol
-           "assign"
-           [ KInt (IntId (Id "c"))
-           , KInt (I 3)
+       KSymbol "assign"
+           [ KInt . Ref $ Id "c"
+           , KInt $ I 3
            ]
 
-simpleIfCondition, simpleNegatedIfCondition :: MiniK
+simpleIfCondition, simpleNegatedIfCondition, withLookupIfCondition :: KTerm
 simpleIfCondition =
-    KBool
-        (And
-            (LT' (I 0) (I 1))
-            (LT' (Mod (I 6) (I 2)) (I 1))
-        )
+    KBool $ And
+        (LT' (I 0) (I 1))
+        $ LT' (Mod (I 6) (I 2)) (I 1)
 simpleNegatedIfCondition =
-    KBool
-        (Not
-            (And
-                (LT' (I 0) (I 1))
-                (LT' (Mod (I 6) (I 2)) (I 1))
-            )
-        )
-
-withLookupIfCondition :: MiniK
+    KBool . Not $ And
+        (LT' (I 0) (I 1))
+        $ LT' (Mod (I 6) (I 2)) (I 1)
 withLookupIfCondition =
-    KBool
-        (And
-            (LT' (IntId (Id "a")) (I 1))
-            (LT' (Mod (I 6) (I 2)) (I 1))
-        )
+    KBool $ And
+        (LT' (Ref (Id "a")) (I 1))
+        $ LT' (Mod (I 6) (I 2)) (I 1)
 
-aLessThan :: Int -> MiniK
+aLessThan :: IntValue -> KTerm
 aLessThan n =
-    KBool (LT' (IntId (Id "a")) (I n))
+    KBool $ LT' (Ref (Id "a")) (I n)
 
-incrementA :: MiniK
+incrementA, initIsPrime, initCounter :: MiniK -> MiniK
 incrementA =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "a"))
-        , KInt (Plus (IntId (Id "a")) (I 1))
+    KSymbol "assign"
+        [ KInt . Ref $ Id "a"
+        , KInt $ Plus (Ref (Id "a")) (I 1)
         ]
-
-initIsPrime :: MiniK
 initIsPrime =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "isPrime"))
-        , KInt (I 0)
+    KSymbol "assign"
+        [ KInt . Ref $ Id "isPrime"
+        , KInt $ I 0
         ]
-
-initCounter :: MiniK
 initCounter =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "counter"))
-        , KInt (I 2)
+    KSymbol "assign"
+        [ KInt . Ref $ Id "counter"
+        , KInt $ I 2
         ]
 
-whileCondition :: Int -> MiniK
+whileCondition :: IntValue -> KTerm
 whileCondition inputNumber =
-    KBool (And counterLessThanN isPrimeLessThan1)
+    KBool $ And counterLessThanN isPrimeLessThan1
   where
     counterLessThanN =
-        LT' (IntId (Id "counter")) (I inputNumber)
+        LT' (Ref (Id "counter")) (I inputNumber)
     isPrimeLessThan1 =
-        LT' (IntId (Id "isPrime")) (I 1)
+        LT' (Ref (Id "isPrime")) (I 1)
 
-ifCondition :: Int -> MiniK
+ifCondition :: IntValue -> KTerm
 ifCondition inputNumber =
-    KBool (LT' (Mod (I inputNumber) (IntId (Id "counter"))) (I 1))
+    KBool (LT' (Mod (I inputNumber) (Ref (Id "counter"))) (I 1))
 
-assignIsPrimeTrue :: MiniK
+assignIsPrimeTrue, incrementCounter :: MiniK -> MiniK
 assignIsPrimeTrue =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "isPrime"))
-        , KInt (I 1)
+    KSymbol "assign"
+        [ KInt . Ref $ Id "isPrime"
+        , KInt $ I 1
         ]
-
-incrementCounter :: MiniK
 incrementCounter =
-    KSymbol
-        "assign"
-        [ KInt (IntId (Id "counter"))
-        , KInt (Plus (IntId (Id "counter")) (I 1))
+    KSymbol "assign"
+        [ KInt (Ref (Id "counter"))
+        , KInt (Plus (Ref (Id "counter")) (I 1))
         ]

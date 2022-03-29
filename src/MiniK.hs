@@ -35,8 +35,6 @@ newtype OfIntValue (v :: Variability) = IVal { intValue :: Int }
 
 type IntValue = OfIntValue Concrete
 
--- deriving stock instance Generic IntValue
-
 newtype OfBoolValue (v :: Variability) = BVal { boolValue :: Bool }
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
@@ -48,10 +46,47 @@ data Variability = Variable | Concrete
      deriving stock (Show, Eq, Ord, Generic)
      deriving anyclass NFData
 
-type family VariabOf (v :: Variability) (t :: Variability -> Type) where
-  VariabOf v Thunk = Thunk v
-  VariabOf Concrete t = t Concrete
-  VariabOf Variable t = Var t
+-- to exclude PolyKind type's instances of a KnownVariability typeclass
+type family ClosedKindVariability (v :: Variability)
+    = (r :: Variability) | r -> v
+  where
+    ClosedKindVariability Variable = Variable
+    ClosedKindVariability Concrete = Concrete
+
+-- singletones to simplify constraints
+data SingletoneVariability (v :: Variability) where
+    SingletoneVariabilityVariable :: SingletoneVariability Variable
+    SingletoneVariabilityConcrete :: SingletoneVariability Concrete
+
+class v ~ ClosedKindVariability v => KnownVariability (v :: Variability) where
+    knownVariability :: SingletoneVariability v
+
+instance KnownVariability Variable where
+    knownVariability = SingletoneVariabilityVariable
+
+instance KnownVariability Concrete where
+    knownVariability = SingletoneVariabilityConcrete
+
+--
+
+-- A bit of magic to be able to have a Variabilities typeclass with lazy
+-- constraints for the VariabOf type.
+type ToVar = Var :: (Variability -> Type) -> Type
+data NotVar (v :: Variability) (t :: Variability -> Type) = NotVar (t v)
+
+type family UnNotVar (t :: Type) = (r :: Type) | r -> t where
+    UnNotVar (NotVar v notVar) = notVar v
+    UnNotVar (Var var) = Var var
+
+type family ToVariab (v :: Variability) (t :: Variability -> Type)
+    = (r :: (Variability -> Type) -> Type) | r -> v
+  where
+    ToVariab v Thunk = NotVar v
+    ToVariab Concrete t = NotVar Concrete
+    ToVariab Variable t = Var
+
+type VariabOf (v :: Variability) (t :: Variability -> Type)
+    = UnNotVar ((ToVariab v t) t)
 
 type family Variab (t :: Type) where
   Variab (t v) = VariabOf v t
@@ -59,8 +94,7 @@ type family Variab (t :: Type) where
 -- | Meta-variable of term
 data Var (t :: Variability -> Type)
     = KVar !Name
-    | K (t Variable)
-    | KAll (t Concrete)
+    | K !(t Variable)
 
 deriving stock instance With Show [a Variable, a Concrete] => Show (Var a)
 deriving stock instance With Eq [a Variable, a Concrete] => Eq (Var a)
@@ -74,16 +108,17 @@ data Evaluated = Redex | Value
      deriving stock (Show, Eq, Ord, Generic)
      deriving anyclass NFData
 
-type family NormalOf (e :: Evaluated) (t :: Type)
+-- ???: r :: Variability -> Type
+type family NormalOf (e :: Evaluated) (t :: Type) = (r :: Type) | r -> t
 
 type instance NormalOf _ (OfIdType v) = OfIdType v
+
 type instance NormalOf Redex (OfIntType v) = OfIntType v
 type instance NormalOf Value (OfIntType v) = OfIntValue v
 type instance NormalOf Redex (OfBoolType v) = OfBoolType v
 type instance NormalOf Value (OfBoolType v) = OfBoolValue v
--- type instance NormalOf _ (Var t) = Var t
 
-type family Normal (t :: Type)
+type family Normal (t :: Type) = (r :: Type)
 
 type instance Normal (OfMiniK Redex v) = Thunk v
 type instance Normal (OfMiniK Value v) = OfMiniK Value v
@@ -91,6 +126,7 @@ type instance Normal (OfMiniK Value v) = OfMiniK Value v
 data Thunk (v :: Variability)
     = KVal !(Variab (OfMiniK Redex v))
     | KSeq !(Variab (OfMiniK Redex v)) (Variab (OfMiniK Redex v))
+-- TODO: rewrite as a Functor of (OfKTerm e v).
 
 deriving stock instance Show (Variab (OfMiniK Redex v)) => Show (Thunk v)
 deriving stock instance Eq (Variab (OfMiniK Redex v)) => Eq (Thunk v)
@@ -109,44 +145,46 @@ deriving anyclass instance
 --   - KVar are variables which represent programs themselves
 data OfMiniK (e :: Evaluated) (v :: Variability)
     = KEmpty
-    -- | name, body, tail
     | KSymbol !Name ![OfKTerm e v] (Variab (Normal (OfMiniK e v)))
+-- TODO: rewrite as a Functor of (OfKTerm e v).
 
 deriving stock instance
     With Show
-        [ Variab (Normal (OfMiniK e v))
-        , OfKTerm e v ]
+        [ OfKTerm e v
+        , Variab (Normal (OfMiniK e v)) ]
     => Show (OfMiniK e v)
 deriving stock instance
     With Eq
-        [ Variab (Normal (OfMiniK e v))
-        , OfKTerm e v ]
+        [ OfKTerm e v
+        , Variab (Normal (OfMiniK e v)) ]
     => Eq (OfMiniK e v)
 deriving stock instance
     With Ord
-        [ Variab (Normal (OfMiniK e v))
-        , OfKTerm e v ]
+        [ OfKTerm e v
+        , Variab (Normal (OfMiniK e v)) ]
     => Ord (OfMiniK e v)
 deriving stock instance
     With Generic
-        [ Variab (Normal (OfMiniK e v))
-        , OfKTerm e v ]
+        [ OfKTerm e v
+        , Variab (Normal (OfMiniK e v)) ]
     => Generic (OfMiniK e v)
 deriving anyclass instance
     WithAll [Generic, NFData]
-        [ Variab (Normal (OfMiniK e v))
-        , OfKTerm e v ]
+        [ OfKTerm e v
+        , Variab (Normal (OfMiniK e v)) ]
     => NFData (OfMiniK e v)
 
 type MiniK = Variab (Normal (OfMiniK Value Concrete))
 type MiniKVar = Variab (Normal (OfMiniK Redex Variable))
 type MiniKVarValue = Variab (Normal (OfMiniK Value Variable))
+type MiniKRedex = Variab (Normal (OfMiniK Redex Concrete))
 
 data OfKTerm (e :: Evaluated) (v :: Variability)
     = KInt !(VariabOf v OfIntType)
     | KBool !(VariabOf v OfBoolType)
     | KMap (VariabOf v (OfMapType Redex))
     | KExp !(Variab (Normal (OfMiniK e v)))
+-- TODO: rewrite as a Functor of (OfKTerm e v).
 
 deriving stock instance
     With Show
@@ -184,58 +222,67 @@ deriving anyclass instance
         , Variab (Normal (OfMiniK e v)) ]
     => NFData (OfKTerm e v)
 
-type KTerm = Variab (Normal (OfKTerm Value Concrete))
+type KTerm = OfKTerm Value Concrete
 type KTermVar = Variab (Normal (OfKTerm Redex Variable))
 type KTermVarValue = Variab (Normal (OfKTerm Value Variable))
 
--- data KType
---     = KTypeId
---     | KTypeInt
---     | KTypeBool
---     | KTypeMap
-
--- data KTerm :: KType -> Type where
---     Id :: !Name -> KTerm KTypeId
---     Ref :: !(KTerm KTypeId) -> KTerm KTypeInt
---     I :: !Int -> KTerm KTypeInt
---     Plus :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeInt
---     Mod :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeInt
---     B :: !Bool -> KTerm KTypeBool
---     Not :: !(KTerm KTypeBool) -> KTerm KTypeBool
---     And :: !(KTerm KTypeBool) -> !(KTerm KTypeBool) -> KTerm KTypeBool
---     LT' :: !(KTerm KTypeInt) -> !(KTerm KTypeInt) -> KTerm KTypeBool
---     KMap :: !MapType -> KTerm KTypeMap
---     deriving stock (Show, Eq, Ord, Generic)
---     deriving anyclass NFData
-
 normalizeK
-    -- :: Thunk Concrete
     :: Variab (Normal (OfMiniK Redex Concrete))
     -> Variab (Normal (OfMiniK Value Concrete))
 normalizeK term = normalizeK' term  KEmpty
   where
-    normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
-        $ normalizeK' term2 normalized
+    normalizeK' (KSeq term1 term2) normalized = normalizeK' (KVal term1)
+        $ normalizeK' (KVal term2) normalized
     normalizeK' (KVal KEmpty) normalized = normalized
-    normalizeK' (KVal (KSymbol name body tail)) normalized = KSymbol name body $ normalizeK' tail normalized
+    normalizeK' (KVal (KSymbol name body tail)) normalized =
+        KSymbol name (normalizeTerm <$> body) $ normalizeK' tail normalized
+    normalizeTerm :: OfKTerm Redex Concrete -> OfKTerm Value Concrete
+    normalizeTerm (KExp term) = KExp $ normalizeK term
+    normalizeTerm (KInt term) = KInt term
+    normalizeTerm (KBool term) = KBool term
+    normalizeTerm (KMap term) = KMap term
 
--- normalizeK :: MiniK -> [MiniK]
--- normalizeK term = normalizeK' term []
---   where
---   normalizeK' (KSeq term1 term2) normalized = normalizeK' term1
---       $ normalizeK' term2 normalized
---   normalizeK' KEmpty normalized = normalized
---   normalizeK' term1 normalized = term1:normalized
+deNormalizeK
+    :: OfMiniK Value Concrete
+    -> OfMiniK Redex Concrete
+deNormalizeK KEmpty = KEmpty
+deNormalizeK (KSymbol name body tail) =
+    KSymbol name (deNormalizeTerm <$> body) . KVal $ deNormalizeK tail
+  where
+    deNormalizeTerm (KExp term) = KExp . KVal $ deNormalizeK term
+    deNormalizeTerm (KInt term) = KInt term
+    deNormalizeTerm (KBool term) = KBool term
+    deNormalizeTerm (KMap term) = KMap term
 
--- deNormalizeK :: [MiniK] -> MiniK
--- deNormalizeK [] = KEmpty
--- deNormalizeK [term, term2] = KSeq term term2
--- deNormalizeK (term:terms) = KSeq term $ deNormalizeK terms
+fromValueMap
+    :: forall (v :: Variability)
+    . KnownVariability v
+    => OfMapType Value v
+    -> OfMapType Redex v
+fromValueMap MapEmpty = MapEmpty
+fromValueMap (MapCons ind val tail) = case knownVariability @v of
+    SingletoneVariabilityVariable
+        -> MapCons
+            (mapVar @Variable (Id . retractConcreteId) ind)
+            (mapVar @Variable (I . IVal . intValue) val)
+            $ mapVar @Variable (fromValueMap @v) tail
+    SingletoneVariabilityConcrete
+        -> MapCons
+            (mapVar @Concrete (Id . retractConcreteId) ind)
+            (mapVar @Concrete (I . IVal . intValue) val)
+            $ mapVar @Concrete (fromValueMap @v) tail
 
--- reNormalizeK :: MiniK -> MiniK
--- reNormalizeK = deNormalizeK . normalizeK
-
---
+fromValueKonf
+    :: forall (e :: Evaluated)
+        (v :: Variability)
+    . KnownVariability v
+    => OfKonfiguration e Value v
+    -> OfKonfiguration e Redex v
+fromValueKonf konfig = case knownVariability @v of
+    SingletoneVariabilityVariable
+        -> konfig { kState = fromValueMap @v `mapVar` kState konfig }
+    SingletoneVariabilityConcrete
+        -> konfig { kState = fromValueMap @v `mapVar` kState konfig }
 
 -- A type for identifiers inside languages defined in MiniK.
 -- For simplicity, languages may only have 'IntType' identifiers.
@@ -279,6 +326,7 @@ deriving anyclass instance
 
 type IntType = VariabOf Concrete OfIntType
 type IntTypeVar = VariabOf Variable OfIntType
+type IntTypeVarValue = Variab (NormalOf Value (OfIntType Variable))
 
 data OfBoolType (v :: Variability)
     = B !Bool
@@ -359,6 +407,8 @@ deriving anyclass instance
 
 type MapType = Variab (OfMapType Value Concrete)
 type MapTypeVar = Variab (OfMapType Redex Variable)
+type MapTypeVarValue = Variab (OfMapType Value Variable)
+type MapTypeRedex = Variab (OfMapType Redex Concrete)
 
 -- retractConcreteMap :: MapType -> [(Name, IntType)]
 -- retractConcreteMap (MapVar _) =
@@ -392,44 +442,47 @@ type MapTypeVar = Variab (OfMapType Redex Variable)
 --   - X is an IdType variable
 --   - M is a MapType variable, here meaning the rest of the map
 --
-data OfKonfiguration (e :: Evaluated) (v :: Variability) =
+data OfKonfiguration (e :: Evaluated) (e' :: Evaluated) (v :: Variability) =
     Konfiguration
         { k :: !(Variab (Normal (OfMiniK e v)))
-        , kState :: !(Variab (OfMapType Value v))
+        , kState :: !(Variab (OfMapType e' v))
         }
 
 deriving stock instance
     With Show
         [ Variab (Normal (OfMiniK e v))
-        , Variab (OfMapType Value v) ]
-    => Show (OfKonfiguration e v)
+        , Variab (OfMapType e' v) ]
+    => Show (OfKonfiguration e e' v)
 deriving stock instance
     With Eq
         [ Variab (Normal (OfMiniK e v))
-        , Variab (OfMapType Value v) ]
-    => Eq (OfKonfiguration e v)
+        , Variab (OfMapType e' v) ]
+    => Eq (OfKonfiguration e e' v)
 deriving stock instance
     With Ord
         [ Variab (Normal (OfMiniK e v))
-        , Variab (OfMapType Value v) ]
-    => Ord (OfKonfiguration e v)
+        , Variab (OfMapType e' v) ]
+    => Ord (OfKonfiguration e e' v)
 deriving stock instance
     With Generic
         [ Variab (Normal (OfMiniK e v))
-        , Variab (OfMapType Value v) ]
-    => Generic (OfKonfiguration e v)
+        , Variab (OfMapType e' v) ]
+    => Generic (OfKonfiguration e e' v)
 deriving anyclass instance
     WithAll [Generic, NFData]
         [ Variab (Normal (OfMiniK e v))
-        , Variab (OfMapType Value v) ]
-    => NFData (OfKonfiguration e v)
+        , Variab (OfMapType e' v) ]
+    => NFData (OfKonfiguration e e' v)
 
-type Konfiguration = OfKonfiguration Value Concrete
-type KonfigurationVar = OfKonfiguration Redex Variable
-type KonfigurationVarValue = OfKonfiguration Value Variable
+type Konfiguration = OfKonfiguration Value Value Concrete
+type KonfigurationVar = OfKonfiguration Redex Value Variable
+type KonfigurationVarValue = OfKonfiguration Value Value Variable
+type KonfigurationConcr = OfKonfiguration Value Redex Concrete
+type KonfigurationRedex = OfKonfiguration Redex Redex Concrete
 
 -- Can the program be rewritten further?
-canBeRewritten :: Konfiguration -> Bool
+canBeRewritten
+    :: forall (e' :: Evaluated) . OfKonfiguration Value e' Concrete -> Bool
 canBeRewritten Konfiguration { k } =
     case k of
         KEmpty -> False
@@ -455,43 +508,99 @@ data RewriteRule =
     deriving stock (Show, Eq, Ord, Generic)
     deriving anyclass NFData
 
-rewrite :: RewriteRule -> RewriteVar
-rewrite (RewriteRule _ r c) =
-    Rewrite (Konfiguration { k = normalizeK $ k r, kState = kState r }) c
+rewriteOf :: RewriteRule -> OfRewrite Redex Value Variable
+rewriteOf RewriteRule { right, sideCondition } =
+    Rewrite (Konfiguration { k = k right, kState = kState right }) sideCondition
 
-data OfRewrite (v :: Variability) = Rewrite
-    { konf :: !(OfKonfiguration Value v)
+--
+
+class toVar ~ ToVariab v a => Variabilities
+    (v :: Variability)
+    (a :: Variability -> Type)
+    (toVar :: (Variability -> Type) -> Type)
+  where
+    mapVar
+        :: forall (b :: Variability -> Type)
+        . (a v -> b v)
+        -> UnNotVar (toVar a)
+        -> UnNotVar (toVar b)
+
+instance
+    (toVar ~ ToVariab v a
+    , toVar ~ NotVar v)
+    => Variabilities v a (NotVar v)
+  where
+    mapVar
+        :: forall (b :: Variability -> Type)
+        . (a v -> b v)
+        -> UnNotVar (toVar a)
+        -> UnNotVar (toVar b)
+    mapVar = mapVarOf @v @a @b @(a v) @(b v)
+
+instance
+    (toVar ~ ToVariab v a
+    , toVar ~ Var
+    , v ~ Variable)
+    => Variabilities Variable a Var
+  where
+    mapVar
+        :: forall (b :: Variability -> Type)
+        . (a v -> b v)
+        -> UnNotVar (toVar a)
+        -> UnNotVar  (toVar b)
+    mapVar = mapVarOf @v @a @b @(Var a) @(Var b)
+
+class VariabilitiesOf (v :: Variability) (a :: Variability -> Type) (b :: Variability -> Type) (ra :: Type) (rb :: Type) where
+    mapVarOf
+        :: (a v -> b v)
+        -> ra
+        -> rb
+
+instance VariabilitiesOf Variable a b (Var a) (Var b) where
+    mapVarOf f = \case
+        KVar name -> KVar name
+        K term -> K $ f term
+instance VariabilitiesOf v a b (a v) (b v) where
+    mapVarOf = ($)
+
+--
+
+data OfRewrite (e :: Evaluated) (e' :: Evaluated) (v :: Variability) = Rewrite
+    { konf :: !(OfKonfiguration e e' v)
     , condition :: !(VariabOf v OfBoolType)
     }
 
 deriving stock instance
     With Show
-        [ OfKonfiguration Value v
+        [ OfKonfiguration e e' v
         , VariabOf v OfBoolType ]
-    => Show (OfRewrite v)
+    => Show (OfRewrite e e' v)
 deriving stock instance
     With Eq
-        [ OfKonfiguration Value v
+        [ OfKonfiguration e e' v
         , VariabOf v OfBoolType ]
-    => Eq (OfRewrite v)
+    => Eq (OfRewrite e e' v)
 deriving stock instance
     With Ord
-        [ OfKonfiguration Value v
+        [ OfKonfiguration e e' v
         , VariabOf v OfBoolType ]
-    => Ord (OfRewrite v)
+    => Ord (OfRewrite e e' v)
 deriving stock instance
     With Generic
-        [ OfKonfiguration Value v
+        [ OfKonfiguration e e' v
         , VariabOf v OfBoolType ]
-    => Generic (OfRewrite v)
+    => Generic (OfRewrite e e' v)
 deriving anyclass instance
     WithAll [Generic, NFData]
-        [ OfKonfiguration Value v
+        [ OfKonfiguration e e' v
         , VariabOf v OfBoolType ]
-    => NFData (OfRewrite v)
+    => NFData (OfRewrite e e' v)
 
-type Rewrite = OfRewrite Concrete
-type RewriteVar = OfRewrite Variable
+type Rewrite = OfRewrite Value Value Concrete
+type RewriteVar = OfRewrite Redex Value Variable
+type RewriteVarValue = OfRewrite Value Value Variable
+type RewriteConcr = OfRewrite Value Redex Concrete
+type RewriteRedex = OfRewrite Redex Redex Concrete
 
 -- auxiliary machinery
 

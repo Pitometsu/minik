@@ -58,7 +58,20 @@ library
       TypeSynonymInstances
       TypeOperators
       GeneralizedNewtypeDeriving
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
+      ScopedTypeVariables
+      FlexibleInstances
+      MultiParamTypeClasses
+      FunctionalDependencies
+      TypeFamilyDependencies
+      AllowAmbiguousTypes
+      FlexibleContexts
+      InstanceSigs
+      ConstraintKinds
+      GADTs
+      DerivingVia
+      ImportQualifiedPost
+      ApplicativeDo
+  ghc-options: -Wall -Wno-unticked-promoted-constructors -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -fwarn-identities
   build-depends:
       base >=4.7 && <5
     , containers
@@ -97,7 +110,20 @@ executable MiniK-exe
       TypeSynonymInstances
       TypeOperators
       GeneralizedNewtypeDeriving
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
+      ScopedTypeVariables
+      FlexibleInstances
+      MultiParamTypeClasses
+      FunctionalDependencies
+      TypeFamilyDependencies
+      AllowAmbiguousTypes
+      FlexibleContexts
+      InstanceSigs
+      ConstraintKinds
+      GADTs
+      DerivingVia
+      ImportQualifiedPost
+      ApplicativeDo
+  ghc-options: -Wall -Wno-unticked-promoted-constructors -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5
@@ -138,7 +164,20 @@ test-suite MiniK-test
       TypeSynonymInstances
       TypeOperators
       GeneralizedNewtypeDeriving
-  ghc-options: -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
+      ScopedTypeVariables
+      FlexibleInstances
+      MultiParamTypeClasses
+      FunctionalDependencies
+      TypeFamilyDependencies
+      AllowAmbiguousTypes
+      FlexibleContexts
+      InstanceSigs
+      ConstraintKinds
+      GADTs
+      DerivingVia
+      ImportQualifiedPost
+      ApplicativeDo
+  ghc-options: -Wall -Wno-unticked-promoted-constructors -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates -O2 -g -debug -threaded -fprof-auto -eventlog "-with-rtsopts=-N -s -h -i0.1 -l-au"
   build-depends:
       MiniK
     , base >=4.7 && <5
