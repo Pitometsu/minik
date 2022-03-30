@@ -5,9 +5,12 @@ module Rewrite
     ) where
 
 import Control.Parallel.Strategies (parTraversable, rdeepseq, withStrategy)
-import MiniK (Evaluated(..), Variability(..), OfKonfiguration (..), type KonfigurationConcr, type KonfigurationRedex, RewriteRule (..), OfRewrite (..), type RewriteVar, pattern I, type Konfiguration, normalizeK, rewriteOf, fromValueKonf, fromValueMap)
+import MiniK
+    (Evaluated(..), Variability(..), OfKonfiguration (..)
+    , type KonfigurationConcr, type KonfigurationRedex, type Konfiguration
+    , RewriteRule (..), OfRewrite (..), normalizeK, rewriteOf, fromValueKonf)
 import Control.Monad qualified as Monad
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe, mapMaybe)
 import CheckCondition (checkCondition, evaluate)
 import Match (match)
 import Substitute (substitute)
@@ -45,7 +48,7 @@ rewriteStep
     :: KonfigurationConcr
     -> [RewriteRule]
     -> KonfigurationConcr
-rewriteStep konfig = fromMaybe konfig . fmap fromValueKonf .rewriteStep' konfig
+rewriteStep konfig = maybe konfig fromValueKonf . rewrite' konfig
 
 rewriteStep'
     :: KonfigurationConcr
@@ -55,8 +58,7 @@ rewriteStep' konfig =
     -- traceEvent "Rewrite step" $
     listToMaybe . parMapMaybe (applyRewriteRule konfig)
   where
-    -- parMapMaybe f = withStrategy (parTraversable rdeepseq) . mapMaybe f
-    parMapMaybe f = mapMaybe f
+    parMapMaybe f = withStrategy (parTraversable rdeepseq) . mapMaybe f
 
 -- Fully execute the program by rewriting with the set of rewrite
 -- rules.
@@ -76,8 +78,7 @@ rewrite
     :: KonfigurationConcr
     -> [RewriteRule]
     -> KonfigurationConcr
-rewrite konfig = fromMaybe konfig
-    . fmap fromValueKonf . rewrite' konfig
+rewrite konfig = maybe konfig fromValueKonf . rewrite' konfig
 
 rewriteNormalize
     :: KonfigurationRedex

@@ -108,3 +108,4 @@ default-extensions:
   - DerivingVia
   - ImportQualifiedPost
   - ApplicativeDo
+  - UndecidableSuperClasses

@@ -207,3 +207,4 @@ What undone, but it worth to do yet:
 Profiling results after datatypes refactoring (made safer):
 
 - without parallel computation ~20sec
+- with parallel computation same ~20sec

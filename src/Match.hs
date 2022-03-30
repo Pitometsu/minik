@@ -35,7 +35,6 @@ match
   =
     matchVar kKonfig kRule Substitution.empty
     >>= matchVar kStateKonfig (mapVar @Variable fromValueMap kStateRule)
-    -- >>= matchVar (fromValueMap kStateKonfig) kStateRule
 
 matchVar
     :: forall (term :: Variability -> Type)
@@ -56,19 +55,6 @@ class Match (term :: Variability -> Type) where
         -> Substitution
         -> Maybe Substitution
 
--- instance Match Thunk where
---     matchWithSubstitution
---         (KSeq konfigTerm1 konfigTerm2)
---         (KSeq ruleTerm1 ruleTerm2)
---         subst
---       = do
---         subst1 <- matchVar konfigTerm1 ruleTerm1 subst
---         subst2 <- matchVar konfigTerm2 ruleTerm2 subst
---         pure $ Substitution.union subst1 subst2
---     matchWithSubstitution (KVal konfigTerm) (KVal ruleTerm) subst
---       = matchVar konfigTerm ruleTerm subst
---     matchWithSubstitution _ _ _ = Nothing
-
 instance Match (OfMiniK Value) where
     matchWithSubstitution KEmpty KEmpty subst =
         -- traceEvent "Match \"KEmpty\"" $
@@ -84,7 +70,7 @@ instance Match (OfMiniK Value) where
         Substitution.multiUnion
         <$> ((:) <$> matchVar konfigTerm ruleTerm subst <*> traverse
             (\(kArg, rArg) -> matchWithSubstitution kArg rArg subst)
-            (zip konfigArgs ruleArgs)) -- `using` parTraversable rdeepseq
+            (zip konfigArgs ruleArgs)) `using` parTraversable rdeepseq
         | otherwise = Nothing
     matchWithSubstitution _ _ _ = Nothing
 
@@ -168,11 +154,6 @@ instance Match (OfMapType Redex) where
         matchWithSubstitution normalizedKonfigMap normalizedRuleMap subst
     matchWithSubstitution _ _ _ = Nothing
 
--- instance Match (OfMapType Value) where
---   matchWithSubstitution konfigTerm ruleTerm = matchWithSubstitution
---       (fromValueMap konfigTerm)
---       (fromValueMap ruleTerm)
-
 instance Match (NormalizedMapOf Redex) where
     matchWithSubstitution
         (NormalizedMapOf (NormalizedOf (OfMap concreteKonfig)))
@@ -205,8 +186,8 @@ instance Match (NormalizedMapOf Redex) where
         matchWithConcrete (MapOf konfigMap) (MapOf ruleMap) =
           -- traceEvent "Match \"NormalizedMap\" with concrete ids" $
           do
-            let -- konfigMap' = I <$> konfigMap
-                    -- ???: more elegant way to split values out
+            let
+                -- ???: more elegant way to split values out
                 intersectionKonfigValues = Map.elems
                     $ Map.intersection konfigMap ruleMap
                 intersectionRuleValues = Map.elems
@@ -216,7 +197,7 @@ instance Match (NormalizedMapOf Redex) where
                 traverse
                     (uncurry matchElements)
                     (zip intersectionKonfigValues intersectionRuleValues)
-                -- `using` parTraversable rdeepseq
+                `using` parTraversable rdeepseq
             return (MapOf difference, Substitution.multiUnion matchedValues)
 
         matchWithSymbolic

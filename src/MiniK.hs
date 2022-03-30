@@ -1,25 +1,48 @@
 module MiniK
-    -- ( MiniK (..)
-    -- , IdType (..)
-    -- , IntType (..)
-    -- , BoolType (..)
-    -- , MapType (..)
-    -- , Konfiguration (..)
-    -- , RewriteRule (..)
-    -- , Name
-    -- , retractIntTerm
-    -- , retractBoolTerm
-    -- , retractIdTerm
-    -- , retractMapTerm
-    -- , retractConcreteId
-    -- , retractConcreteMap
-    -- , extractConcreteId
-    -- , canBeRewritten
-    -- , normalizeK
-    -- , deNormalizeK
-    -- , reNormalizeK
-    -- ) where
-    where
+    ( Name
+    , OfIntValue (..)
+    , IntValue
+    , OfBoolValue (..)
+    , BoolValue
+    , Variability (..)
+    , Variab
+    , Var (..)
+    , Evaluated (..)
+    , NormalOf
+    , Normal
+    , Thunk (..)
+    , OfMiniK (..)
+    , MiniK
+    , OfKTerm (..)
+    , KTerm
+    , normalizeK
+    , deNormalizeK
+    , fromValueMap
+    , fromValueKonf
+    , OfIdType (..)
+    , IdType
+    , OfIntType (..)
+    , IntType
+    , IntTypeVar
+    , OfBoolType (..)
+    , BoolType
+    , OfMapType (..)
+    , MapTypeRedex
+    , OfKonfiguration (..)
+    , Konfiguration
+    , KonfigurationVarValue
+    , KonfigurationConcr
+    , KonfigurationRedex
+    , canBeRewritten
+    , RewriteRule (..)
+    , rewriteOf
+    , Variabilities (..)
+    , OfRewrite (..)
+    , RewriteVar
+    , RewriteRedex
+    , With
+    , WithAll
+    ) where
 
 import Control.DeepSeq (type NFData)
 import Data.Kind (type Constraint, type Type)
@@ -71,8 +94,7 @@ instance KnownVariability Concrete where
 
 -- A bit of magic to be able to have a Variabilities typeclass with lazy
 -- constraints for the VariabOf type.
-type ToVar = Var :: (Variability -> Type) -> Type
-data NotVar (v :: Variability) (t :: Variability -> Type) = NotVar (t v)
+data NotVar (v :: Variability) (t :: Variability -> Type)
 
 type family UnNotVar (t :: Type) = (r :: Type) | r -> t where
     UnNotVar (NotVar v notVar) = notVar v
@@ -175,9 +197,6 @@ deriving anyclass instance
     => NFData (OfMiniK e v)
 
 type MiniK = Variab (Normal (OfMiniK Value Concrete))
-type MiniKVar = Variab (Normal (OfMiniK Redex Variable))
-type MiniKVarValue = Variab (Normal (OfMiniK Value Variable))
-type MiniKRedex = Variab (Normal (OfMiniK Redex Concrete))
 
 data OfKTerm (e :: Evaluated) (v :: Variability)
     = KInt !(VariabOf v OfIntType)
@@ -223,19 +242,17 @@ deriving anyclass instance
     => NFData (OfKTerm e v)
 
 type KTerm = OfKTerm Value Concrete
-type KTermVar = Variab (Normal (OfKTerm Redex Variable))
-type KTermVarValue = Variab (Normal (OfKTerm Value Variable))
 
 normalizeK
     :: Variab (Normal (OfMiniK Redex Concrete))
     -> Variab (Normal (OfMiniK Value Concrete))
-normalizeK term = normalizeK' term  KEmpty
+normalizeK term' = normalizeK' term'  KEmpty
   where
     normalizeK' (KSeq term1 term2) normalized = normalizeK' (KVal term1)
         $ normalizeK' (KVal term2) normalized
     normalizeK' (KVal KEmpty) normalized = normalized
-    normalizeK' (KVal (KSymbol name body tail)) normalized =
-        KSymbol name (normalizeTerm <$> body) $ normalizeK' tail normalized
+    normalizeK' (KVal (KSymbol name body rest)) normalized =
+        KSymbol name (normalizeTerm <$> body) $ normalizeK' rest normalized
     normalizeTerm :: OfKTerm Redex Concrete -> OfKTerm Value Concrete
     normalizeTerm (KExp term) = KExp $ normalizeK term
     normalizeTerm (KInt term) = KInt term
@@ -246,8 +263,8 @@ deNormalizeK
     :: OfMiniK Value Concrete
     -> OfMiniK Redex Concrete
 deNormalizeK KEmpty = KEmpty
-deNormalizeK (KSymbol name body tail) =
-    KSymbol name (deNormalizeTerm <$> body) . KVal $ deNormalizeK tail
+deNormalizeK (KSymbol name body rest) =
+    KSymbol name (deNormalizeTerm <$> body) . KVal $ deNormalizeK rest
   where
     deNormalizeTerm (KExp term) = KExp . KVal $ deNormalizeK term
     deNormalizeTerm (KInt term) = KInt term
@@ -260,17 +277,17 @@ fromValueMap
     => OfMapType Value v
     -> OfMapType Redex v
 fromValueMap MapEmpty = MapEmpty
-fromValueMap (MapCons ind val tail) = case knownVariability @v of
+fromValueMap (MapCons ind val rest) = case knownVariability @v of
     SingletoneVariabilityVariable
         -> MapCons
             (mapVar @Variable (Id . retractConcreteId) ind)
             (mapVar @Variable (I . IVal . intValue) val)
-            $ mapVar @Variable (fromValueMap @v) tail
+            $ mapVar @Variable (fromValueMap @v) rest
     SingletoneVariabilityConcrete
         -> MapCons
             (mapVar @Concrete (Id . retractConcreteId) ind)
             (mapVar @Concrete (I . IVal . intValue) val)
-            $ mapVar @Concrete (fromValueMap @v) tail
+            $ mapVar @Concrete (fromValueMap @v) rest
 
 fromValueKonf
     :: forall (e :: Evaluated)
@@ -326,7 +343,6 @@ deriving anyclass instance
 
 type IntType = VariabOf Concrete OfIntType
 type IntTypeVar = VariabOf Variable OfIntType
-type IntTypeVarValue = Variab (NormalOf Value (OfIntType Variable))
 
 data OfBoolType (v :: Variability)
     = B !Bool
@@ -362,7 +378,6 @@ deriving anyclass instance
 
 type BoolType = VariabOf Concrete OfBoolType
 type BoolTypeVar = VariabOf Variable OfBoolType
-type BoolTypeVarValue = Variab (NormalOf Value (OfBoolType Variable))
 
 -- A type for MiniK maps, used for storing the values identifiers
 -- point to during the execution of a language defined in MiniK.
@@ -405,18 +420,7 @@ deriving anyclass instance
         , Variab (OfMapType e v) ]
     => NFData (OfMapType e v)
 
-type MapType = Variab (OfMapType Value Concrete)
-type MapTypeVar = Variab (OfMapType Redex Variable)
-type MapTypeVarValue = Variab (OfMapType Value Variable)
 type MapTypeRedex = Variab (OfMapType Redex Concrete)
-
--- retractConcreteMap :: MapType -> [(Name, IntType)]
--- retractConcreteMap (MapVar _) =
---     error "Expecting concrete element of type Map."
--- retractConcreteMap MapEmpty = []
--- retractConcreteMap (MapCons idTerm intTerm mapTerm) =
---     (retractConcreteId idTerm, intTerm)
---     : retractConcreteMap mapTerm
 
 -- The MiniK program configuration: the 'k' component represents
 -- the computation described in the MiniK language, and the
@@ -512,7 +516,7 @@ rewriteOf :: RewriteRule -> OfRewrite Redex Value Variable
 rewriteOf RewriteRule { right, sideCondition } =
     Rewrite (Konfiguration { k = k right, kState = kState right }) sideCondition
 
---
+-- mapVar machinery
 
 class toVar ~ ToVariab v a => Variabilities
     (v :: Variability)
@@ -596,10 +600,7 @@ deriving anyclass instance
         , VariabOf v OfBoolType ]
     => NFData (OfRewrite e e' v)
 
-type Rewrite = OfRewrite Value Value Concrete
 type RewriteVar = OfRewrite Redex Value Variable
-type RewriteVarValue = OfRewrite Value Value Variable
-type RewriteConcr = OfRewrite Value Redex Concrete
 type RewriteRedex = OfRewrite Redex Redex Concrete
 
 -- auxiliary machinery
@@ -611,5 +612,5 @@ type family With constraint types where
 
 type WithAll :: forall typ. [typ -> Constraint] -> [typ] -> Constraint
 type family WithAll constraints types where
-    WithAll typ '[] = ()
+    WithAll '[] _ = ()
     WithAll (constraint : rest) types = (With constraint types, WithAll rest types)

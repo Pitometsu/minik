@@ -4,8 +4,6 @@ module Substitution
     , empty
     , union
     , multiUnion
-    -- , variablesToSubstitute
-    -- , toList
     , getIds
     ) where
 
@@ -49,7 +47,7 @@ multiUnion =
 
 class SubstitutionElement (term :: Variability -> Type) where
     lookup :: Name -> Substitution -> Maybe (term Concrete)
-    insert :: Name -> (term Concrete) -> Substitution -> Substitution
+    insert :: Name -> term Concrete -> Substitution -> Substitution
 
 instance SubstitutionElement (OfMiniK Value) where
     lookup name subst = Map.lookup name $ varK subst
@@ -71,14 +69,6 @@ instance SubstitutionElement (OfMapType Redex) where
     lookup name subst = Map.lookup name $ varMap subst
     insert name term subst =
         subst { varMap = Map.insert name term $ varMap subst }
-
--- variablesToSubstitute :: Substitution -> [Name]
--- variablesToSubstitute (Substitution subst) =
---     Map.keys subst
-
--- toList :: Substitution -> [(Name, MiniK)]
--- toList (Substitution subst) =
---     Map.toList subst
 
 getIds :: Substitution -> Set Name
 getIds Substitution { varId } = Set.fromList $ retractConcreteId <$> Map.elems varId

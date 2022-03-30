@@ -1,17 +1,16 @@
 module NormalizedMap
-    where
-    -- ( OfNormalizedMap (..)
-    -- , NormalizedMap
-    -- , NormalizedMapVar
-    -- , NormalizedMapVarValue
-    -- , NormalizedMapRedex
-    -- , normalize
-    -- , unNormalize
-    -- , renormalizeMap
-    -- , fromConcrete
-    -- , lookupConcreteId
-    -- , map
-    -- ) where
+    ( OfNormalizedMap (..)
+    , OfNormalized (..)
+    , OfMap (..)
+    , MapOf (..)
+    , MapOfInt
+    , NormalizedMapOf (..)
+    , NormalizedOf (..)
+    , ConcreteMapRedex
+    , NormalizedMapConcrete (..)
+    , normalizeVar
+    , renormalizeTraverse
+    ) where
 
 import Prelude hiding (map, traverse)
 import Prelude qualified as P (traverse)
@@ -36,6 +35,24 @@ import GHC.Generics (type Generic)
 newtype OfNormalizedMap (v :: Variability) (e :: Evaluated) = NormalizedMap
     { unNormalizedMap :: OfNormalized v e (Variab (NormalOf e (OfIntType v))) }
 
+deriving stock instance
+    Show (Variab (NormalOf e (OfIntType v))) => Show (OfNormalizedMap v e)
+deriving stock instance
+    Eq (Variab (NormalOf e (OfIntType v))) => Eq (OfNormalizedMap v e)
+deriving stock instance
+   Ord (Variab (NormalOf e (OfIntType v))) => Ord (OfNormalizedMap v e)
+deriving stock instance
+    Generic (Variab (NormalOf e (OfIntType v))) => Generic (OfNormalizedMap v e)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        '[ Variab (NormalOf e (OfIntType v)) ]
+    => NFData (OfNormalizedMap v e)
+
+-- OfNormalizedMap Concrete Value -- ^ for configuration state
+-- OfNormalizedMap Variable Redex -- ^ for Map in MiniK expession
+-- OfNormalizedMap Variable Value -- ^ variable state
+-- OfNormalizedMap Concrete Redex -- ^ state after subst, till eval
+
 data OfNormalized (v :: Variability) (e :: Evaluated) (t :: Type) = OfNormalized
     { opaque :: !(Maybe Name)
     , symbolic :: !(MapOf v e t)
@@ -51,30 +68,26 @@ deriving stock instance Generic t => Generic (OfNormalized v e t)
 deriving anyclass instance
     WithAll [Generic, NFData] '[ t ] => NFData (OfNormalized v e t)
 
--- data OfNormalizedMap (v :: Variability) (e :: Evaluated) =
---     NormalizedMap
---         { opaque :: !(Maybe Name)
---         , symbolic :: !(OfMap v e)
---         , concrete :: !(OfMap v e)
---         }
---     deriving (Functor, Applicative, Monad, Foldable, Traversable)
---         via (OfMap v e)
-
-type NormalizedMap = OfNormalizedMap Concrete Value -- ^ state
-type NormalizedMapVar = OfNormalizedMap Variable Redex -- ^ exp
-type NormalizedMapVarValue = OfNormalizedMap Variable Value -- ^ stateVar
-type NormalizedMapRedex = OfNormalizedMap Concrete Redex -- ^ state after subst, till eval
-
 newtype OfMap (v :: Variability) (e :: Evaluated)
     = OfMap { unOfMap :: MapOfInt v e }
+
+deriving stock instance
+    Show (Variab (NormalOf e (OfIntType v))) => Show (OfMap v e)
+deriving stock instance
+    Eq (Variab (NormalOf e (OfIntType v))) => Eq (OfMap v e)
+deriving stock instance
+   Ord (Variab (NormalOf e (OfIntType v))) => Ord (OfMap v e)
+deriving stock instance
+    Generic (Variab (NormalOf e (OfIntType v))) => Generic (OfMap v e)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        '[ Variab (NormalOf e (OfIntType v)) ]
+    => NFData (OfMap v e)
 
 newtype MapOf (v :: Variability) (e :: Evaluated) (t :: Type)
     = MapOf { unMapOf :: Map Name t }
     deriving (Functor, Applicative, Monad, Foldable, Traversable)
         via (MapOf v e)
-
-type MapOfInt (v :: Variability) (e :: Evaluated)
-    = MapOf v e (Variab (NormalOf e (OfIntType v)))
 
 deriving stock instance Show t => Show (MapOf v e t)
 deriving stock instance Eq t => Eq (MapOf v e t)
@@ -83,15 +96,28 @@ deriving stock instance Generic t => Generic (MapOf v e t)
 deriving anyclass instance
     WithAll [Generic, NFData] '[ t ] => NFData (MapOf v e t)
 
-type ConcreteMap = OfMap Concrete Value
-type ConcreteMapVar = OfMap Variable Redex
-type ConcreteMapVarValue = OfMap Variable Value
+type MapOfInt (v :: Variability) (e :: Evaluated)
+    = MapOf v e (Variab (NormalOf e (OfIntType v)))
+
 type ConcreteMapRedex = OfMap Concrete Redex
 
 -- wrapper for Match type class instance
 
 newtype NormalizedMapOf (e :: Evaluated) (v :: Variability) = NormalizedMapOf
     { unNormalizedMapOf :: NormalizedOf e v (ConcreteMapOf v e) }
+
+deriving stock instance
+    Show (ConcreteMapOf v e) => Show (NormalizedMapOf e v)
+deriving stock instance
+    Eq (ConcreteMapOf v e) => Eq (NormalizedMapOf e v)
+deriving stock instance
+   Ord (ConcreteMapOf v e) => Ord (NormalizedMapOf e v)
+deriving stock instance
+    Generic (ConcreteMapOf v e) => Generic (NormalizedMapOf e v)
+deriving anyclass instance
+    WithAll [Generic, NFData]
+        '[ ConcreteMapOf v e ]
+    => NFData (NormalizedMapOf e v)
 
 newtype NormalizedOf (e :: Evaluated) (v :: Variability) (t :: Type)
     = NormalizedOf { unNormalizedOf :: t }
@@ -105,7 +131,10 @@ deriving stock instance Generic t => Generic (NormalizedOf e v t)
 deriving anyclass instance
     WithAll [Generic, NFData] '[ t ] => NFData (NormalizedOf e v t)
 
-class NormalizedMapConcrete (v :: Variability) where
+class WithAll [Show, Eq, Ord, Generic, NFData]
+        '[ ConcreteMapOf v Redex, ConcreteMapOf v Value ]
+    => NormalizedMapConcrete (v :: Variability)
+  where
     type ConcreteMapOf v :: Evaluated -> Type
 
     map :: forall (e :: Evaluated)
@@ -376,6 +405,8 @@ lookupConcreteId'
     -> Maybe (Variab (NormalOf e (OfIntType v)))
 lookupConcreteId' name = Map.lookup name . unMapOf
 
+-- util
+
 normalizeVar
     :: forall (e :: Evaluated)
     . Var (OfMapType e)
@@ -393,4 +424,4 @@ renormalizeTraverse
         -> m (Variab (NormalOf e' (OfIntType v))))
     -> OfMapType e v
     -> m (Variab (OfMapType e' v))
-renormalizeTraverse f = fmap unNormalize . (traverse @v f) . normalize
+renormalizeTraverse f = fmap unNormalize . traverse @v f . normalize

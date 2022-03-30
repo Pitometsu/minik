@@ -97,7 +97,6 @@ instance SubstituteVariable (OfKTerm Redex) where
         KMap <$> fromVar mapTerm subst
     substituteVariable (KExp kTerm) subst =
         KExp <$> substituteVariable kTerm subst
-        -- KExp . K <$> substituteVariable kTerm subst
 
 instance SubstituteVariable OfIntType where
     substituteVariable (I val) _ = pure $ I val
@@ -109,9 +108,6 @@ instance SubstituteVariable OfIntType where
     substituteVariable (Mod intTerm1 intTerm2) subst =
         Mod <$> fromVar intTerm1 subst
             <*> fromVar intTerm2 subst
-
--- instance SubstituteVariable OfIntValue where
---     substituteVariable (IVal val) _ = pure $ IVal val
 
 instance SubstituteVariable OfIdType where
     substituteVariable (Id name) _ = pure $ Id name
@@ -127,11 +123,8 @@ instance SubstituteVariable OfBoolType where
         LT' <$> fromVar intTerm1 subst
             <*> fromVar intTerm2 subst
 
--- instance SubstituteVariable OfBoolValue where
---     substituteVariable (BVal val) _ = pure $ BVal val
-
 instance SubstituteVariable (OfMapType Redex) where
-    substituteVariable MapEmpty _ = pure $ MapEmpty
+    substituteVariable MapEmpty _ = pure MapEmpty
     substituteVariable (MapCons idTerm intTerm mapTerm) subst =
         MapCons <$> fromVar idTerm subst
             <*> fromVar intTerm subst
@@ -139,22 +132,6 @@ instance SubstituteVariable (OfMapType Redex) where
 
 instance SubstituteVariable (OfMapType Value) where
     substituteVariable term = substituteVariable (fromValueMap term)
-
---
-
--- toRewriteFormVar
---     :: forall (v :: Variability) (term :: Evaluated -> Variability -> Type)
---     . (ToRewriteForm term, Variabilities v)
---     => Variab (term Value v)
---     -> Variab (term Redex v)
--- toRewriteFormVar = mapVar toRewriteForm
-
--- class ToRewriteForm (term :: Evaluated -> Variability -> Type) where
---     toRewriteForm
---         :: forall (v :: Variability)
---         . Variabilities v
---         => term Value v
---         -> term Redex v
 
 class ToRewriteForm (term :: Variability -> Type) where
     toRewriteForm
@@ -166,14 +143,3 @@ instance ToRewriteForm OfIdType where toRewriteForm = id
 instance ToRewriteForm OfIntType where toRewriteForm = id
 instance ToRewriteForm OfBoolType where toRewriteForm = id
 instance ToRewriteForm (OfMapType Redex) where toRewriteForm = id
-
--- instance ToRewriteForm OfMiniK where
---     toRewriteForm KEmpty = KEmpty
---     toRewriteForm (KSymbol name body tail) = KSymbol name (toRewriteForm <$> body)
---         . KVal $ toRewriteFormVar tail
-
--- instance ToRewriteForm OfKTerm where
---     toRewriteForm (KInt term) = KInt $ term
---     toRewriteForm (KBool term) = KBool term
---     toRewriteForm (KMap term) = KMap term
---     toRewriteForm (KExp term) = KExp . KVal $ toRewriteFormVar term
